@@ -89,7 +89,7 @@ export async function POST(request: Request) {
           .update({ status: 'failed' })
           .eq('id', documentId);
       }
-    } catch (_) {
+    } catch {
       // ignore
     }
     const msg = error instanceof Error ? error.message : 'Processing failed';

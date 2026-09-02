@@ -19,7 +19,7 @@ export async function POST(request: Request) {
       throw new Error('Issue not found');
     }
 
-    const { data: prevSuggestion, error: suggError } = await supabase
+    const { data: prevSuggestion } = await supabase
       .from('suggestions')
       .select('*')
       .eq('issue_id', issueId)
@@ -75,8 +75,9 @@ export async function POST(request: Request) {
 
     throw new Error('No alternative generated');
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Alternative generation error:', error);
-    return NextResponse.json({ error: error.message || 'Alternative generation failed' }, { status: 500 });
+    const msg = error instanceof Error ? error.message : 'Alternative generation failed';
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

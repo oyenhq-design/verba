@@ -22,7 +22,7 @@ interface DocumentData {
 
 export default function WorkspacePage({ params }: { params: { documentId: string } }) {
   const [doc, setDoc] = useState<DocumentData | null>(null);
-  const [issues, setIssues] = useState<any[]>([]);
+  const [issues, setIssues] = useState<Record<string, unknown>[]>([]);
   const [activeIssueId, setActiveIssueId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
@@ -46,9 +46,10 @@ export default function WorkspacePage({ params }: { params: { documentId: string
       if (!issuesError && issuesData) {
         setIssues(issuesData);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      setError(err.message || 'Failed to load document');
+      const msg = err instanceof Error ? err.message : 'Failed to load document';
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -56,6 +57,7 @@ export default function WorkspacePage({ params }: { params: { documentId: string
 
   useEffect(() => {
     loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.documentId]);
 
   const handleAnalyze = async () => {
@@ -83,7 +85,7 @@ export default function WorkspacePage({ params }: { params: { documentId: string
         return {
           ...iss,
           status: action === 'rejected' ? 'rejected' : 'resolved',
-          suggestions: iss.suggestions.map((s: any) => 
+          suggestions: iss.suggestions.map((s: { id: string, status?: string, suggested_text?: string }) => 
             s.id === suggestionId ? { ...s, status: action, suggested_text: newText || s.suggested_text } : s
           )
         };
@@ -127,7 +129,7 @@ export default function WorkspacePage({ params }: { params: { documentId: string
     // For MVP, if there is a resolved issue, we just do a naive string replacement 
     // (In reality, we should apply it based on offsets to avoid multi-match bugs)
     resolvedBlockIssues.forEach(iss => {
-      const acceptedSugg = iss.suggestions.find((s:any) => s.status === 'accepted' || s.status === 'manually_edited');
+      const acceptedSugg = iss.suggestions.find((s: { status: string, suggested_text: string }) => s.status === 'accepted' || s.status === 'manually_edited');
       if (acceptedSugg) {
         text = text.replace(iss.original_text, acceptedSugg.suggested_text);
       }
