@@ -1,0 +1,27 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #FFFFFF;
+  --background-pale: #F8FAFC;
+  --background-secondary: #F6F8FB;
+  --foreground: #101828;
+  --foreground-secondary: #667085;
+  --foreground-muted: #98A2B3;
+  --ink: #101828;
+  --ink-secondary: #344054;
+  --ink-muted: #667085;
+  --accent: #1677FF;
+  --accent-light: #E6F0FF;
+  --accent-hover: #0958D9;
+  --border-light: #F0F0F0;
+  --surface: #FFFFFF;
+  --status-success: #12B76A;
+  --status-error: #F04438;
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+}
