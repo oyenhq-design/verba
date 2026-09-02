@@ -53,8 +53,8 @@ export async function POST(request: Request) {
     // 5. Calculate word count roughly
     let wordCount = 0;
     if (parsedJson.sections) {
-      parsedJson.sections.forEach((section: any) => {
-        section.blocks?.forEach((block: any) => {
+      parsedJson.sections.forEach((section: { blocks?: { text?: string }[] }) => {
+        section.blocks?.forEach((block: { text?: string }) => {
           if (block.text) {
             wordCount += block.text.trim().split(/\s+/).length;
           }
@@ -78,7 +78,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true, documentId });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Processing error:', error);
     // Try to mark as failed
     try {
@@ -89,9 +89,10 @@ export async function POST(request: Request) {
           .update({ status: 'failed' })
           .eq('id', documentId);
       }
-    } catch (e) {
+    } catch (_) {
       // ignore
     }
-    return NextResponse.json({ error: error.message || 'Processing failed' }, { status: 500 });
+    const msg = error instanceof Error ? error.message : 'Processing failed';
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

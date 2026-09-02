@@ -20,7 +20,7 @@ export async function POST(request: Request) {
     }
 
     const blocks = docData.parsed_content.sections?.[0]?.blocks || [];
-    const paragraphs = blocks.filter((b: any) => b.type === 'paragraph' && b.text?.trim().length > 0);
+    const paragraphs = blocks.filter((b: { type: string, text?: string }) => b.type === 'paragraph' && (b.text?.trim().length || 0) > 0);
 
     // 2. Fetch existing issues to avoid re-analysis
     const { data: existingIssues, error: issuesError } = await supabase
@@ -112,8 +112,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true, newIssuesCount });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Analysis orchestration error:', error);
-    return NextResponse.json({ error: error.message || 'Analysis failed' }, { status: 500 });
+    const msg = error instanceof Error ? error.message : 'Analysis failed';
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

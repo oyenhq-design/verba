@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState } from 'react';
-import { supabase } from '@/lib/supabase';
 import { Check, X, RefreshCw, Edit2, Loader2, ShieldCheck } from 'lucide-react';
 
 interface Suggestion {
