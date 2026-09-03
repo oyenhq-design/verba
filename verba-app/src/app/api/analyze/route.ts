@@ -48,7 +48,8 @@ export async function POST(request: Request) {
       const context = i > 0 ? paragraphs[i - 1].text : '';
 
       try {
-        const engineResponse = await fetch('http://127.0.0.1:8000/api/analyze', {
+        const engineUrl = process.env.VERBA_ENGINE_URL || 'http://localhost:8000';
+        const engineResponse = await fetch(`${engineUrl}/api/analyze`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

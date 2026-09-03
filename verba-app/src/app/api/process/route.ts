@@ -40,7 +40,8 @@ export async function POST(request: Request) {
     const formData = new FormData();
     formData.append('file', fileData, 'document.docx');
 
-    const engineResponse = await fetch('http://127.0.0.1:8000/api/parse', {
+    const engineUrl = process.env.VERBA_ENGINE_URL || 'http://localhost:8000';
+    const engineResponse = await fetch(`${engineUrl}/api/parse`, {
       method: 'POST',
       body: formData,
     });

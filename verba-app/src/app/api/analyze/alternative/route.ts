@@ -32,7 +32,8 @@ export async function POST(request: Request) {
     const previousSuggestionText = prevSuggestion ? prevSuggestion.suggested_text : '';
 
     // Call Python Engine
-    const engineResponse = await fetch('http://127.0.0.1:8000/api/analyze/alternative', {
+    const engineUrl = process.env.VERBA_ENGINE_URL || 'http://localhost:8000';
+    const engineResponse = await fetch(`${engineUrl}/api/analyze/alternative`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

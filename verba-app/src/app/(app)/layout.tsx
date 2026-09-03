@@ -8,6 +8,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <aside className="w-[240px] bg-white border-r border-border-light flex flex-col hidden md:flex">
         <div className="h-[64px] flex items-center px-6 border-b border-border-light shrink-0">
           <Link href="/">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/logo.png" alt="Verba" className="h-[28px] w-auto object-contain" />
           </Link>
         </div>
@@ -42,6 +43,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         {/* Top bar (mobile only) */}
         <header className="h-[64px] bg-white border-b border-border-light flex items-center justify-between px-4 md:hidden shrink-0">
           <Link href="/">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/logo.png" alt="Verba" className="h-[24px] w-auto object-contain" />
           </Link>
           <button className="p-2 text-foreground-secondary">

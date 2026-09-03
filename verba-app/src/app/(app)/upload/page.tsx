@@ -58,7 +58,7 @@ export default function UploadPage() {
       const userId = '00000000-0000-0000-0000-000000000000'; // Placeholder for auth
       const storagePath = `${userId}/${documentId}/original.docx`;
 
-      const { data: storageData, error: storageError } = await supabase.storage
+      const { error: storageError } = await supabase.storage
         .from('documents')
         .upload(storagePath, file, {
           cacheControl: '3600',
@@ -70,7 +70,7 @@ export default function UploadPage() {
       }
 
       // 2. Insert record into Database
-      const { data: dbData, error: dbError } = await supabase
+      const { error: dbError } = await supabase
         .from('documents')
         .insert({
           id: documentId,
@@ -109,10 +109,10 @@ export default function UploadPage() {
         router.push(`/workspace/${documentId}`);
       }, 1000);
 
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
       setStatus('error');
-      setErrorMessage(err.message || 'An unexpected error occurred.');
+      setErrorMessage(err instanceof Error ? err.message : 'An unexpected error occurred.');
     }
   };
 

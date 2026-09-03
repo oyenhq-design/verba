@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Loader2, Sparkles, CheckCircle2 } from 'lucide-react';
+import { Loader2, Sparkles } from 'lucide-react';
 import { WritingAssistant } from '@/components/WritingAssistant';
 
 interface Block {
@@ -20,9 +20,27 @@ interface DocumentData {
   parsed_content: { sections: { blocks: Block[]; }[]; };
 }
 
+interface Suggestion {
+  id: string;
+  status: string;
+  suggested_text: string;
+  explanation: string;
+}
+
+interface Issue {
+  id: string;
+  document_id: string;
+  block_id: string;
+  status: string;
+  original_text: string;
+  explanation: string;
+  issue_type: string;
+  suggestions: Suggestion[];
+}
+
 export default function WorkspacePage({ params }: { params: { documentId: string } }) {
   const [doc, setDoc] = useState<DocumentData | null>(null);
-  const [issues, setIssues] = useState<Record<string, unknown>[]>([]);
+  const [issues, setIssues] = useState<Issue[]>([]);
   const [activeIssueId, setActiveIssueId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
@@ -85,7 +103,7 @@ export default function WorkspacePage({ params }: { params: { documentId: string
         return {
           ...iss,
           status: action === 'rejected' ? 'rejected' : 'resolved',
-          suggestions: iss.suggestions.map((s: { id: string, status?: string, suggested_text?: string }) => 
+          suggestions: iss.suggestions.map(s => 
             s.id === suggestionId ? { ...s, status: action, suggested_text: newText || s.suggested_text } : s
           )
         };
@@ -129,8 +147,8 @@ export default function WorkspacePage({ params }: { params: { documentId: string
     // For MVP, if there is a resolved issue, we just do a naive string replacement 
     // (In reality, we should apply it based on offsets to avoid multi-match bugs)
     resolvedBlockIssues.forEach(iss => {
-      const acceptedSugg = iss.suggestions.find((s: { status: string, suggested_text: string }) => s.status === 'accepted' || s.status === 'manually_edited');
-      if (acceptedSugg) {
+      const acceptedSugg = iss.suggestions.find(s => s.status === 'accepted' || s.status === 'manually_edited');
+      if (acceptedSugg && acceptedSugg.suggested_text) {
         text = text.replace(iss.original_text, acceptedSugg.suggested_text);
       }
     });
