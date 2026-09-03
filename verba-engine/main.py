@@ -22,11 +22,7 @@ app = FastAPI(title="HumanDraft Python Service")
 # Restrict CORS to expected frontends
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000", 
-        "http://localhost:3001",
-        "https://app.verba.com"
-    ],
+    allow_origins=os.getenv("CORS_ORIGINS", "https://app.verba.com").split(","),
     allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],

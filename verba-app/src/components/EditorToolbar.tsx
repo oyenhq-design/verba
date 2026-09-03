@@ -15,13 +15,7 @@ import {
   Heading1,
   Heading2,
   Heading3,
-  Type,
-  List,
-  ListOrdered,
-  IndentIncrease,
-  IndentDecrease,
-  MoreHorizontal,
-  ChevronDown
+  Type
 } from 'lucide-react';
 
 interface EditorToolbarProps {
@@ -105,18 +99,6 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
 
       <Divider />
 
-      {/* Fonts (Mock for now) */}
-      <div className="flex items-center mx-1 px-2 py-1 rounded hover:bg-slate-200 cursor-not-allowed opacity-50 text-slate-600 transition-colors">
-        <span className="text-[13px] mr-1">Inter</span>
-        <ChevronDown size={14} />
-      </div>
-      <div className="flex items-center mx-1 px-2 py-1 rounded hover:bg-slate-200 cursor-not-allowed opacity-50 text-slate-600 transition-colors">
-        <span className="text-[13px] mr-1">11</span>
-        <ChevronDown size={14} />
-      </div>
-
-      <Divider />
-
       {/* Text Marks */}
       <ToolbarButton onClick={toggleBold} isActive={editor.isActive('bold')} disabled={!editor.can().toggleBold()}>
         <Bold size={16} />
@@ -142,33 +124,6 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
       </ToolbarButton>
       <ToolbarButton onClick={() => setAlign('justify')} isActive={editor.isActive({ textAlign: 'justify' })}>
         <AlignJustify size={16} />
-      </ToolbarButton>
-
-      <Divider />
-
-      {/* Lists (Mocked) */}
-      <ToolbarButton disabled={true}>
-        <List size={16} />
-      </ToolbarButton>
-      <ToolbarButton disabled={true}>
-        <ListOrdered size={16} />
-      </ToolbarButton>
-
-      <Divider />
-
-      {/* Indent (Mocked) */}
-      <ToolbarButton disabled={true}>
-        <IndentDecrease size={16} />
-      </ToolbarButton>
-      <ToolbarButton disabled={true}>
-        <IndentIncrease size={16} />
-      </ToolbarButton>
-
-      <Divider />
-
-      {/* More (Mocked) */}
-      <ToolbarButton disabled={true}>
-        <MoreHorizontal size={16} />
       </ToolbarButton>
     </div>
   );

@@ -69,13 +69,14 @@ export async function POST(request: Request) {
 
     const parsedJson = await engineResponse.json();
 
-    // 5. Calculate word count roughly
+    // 5. Calculate word count deterministically
     let wordCount = 0;
     if (parsedJson.sections) {
       parsedJson.sections.forEach((section: { blocks?: { text?: string }[] }) => {
         section.blocks?.forEach((block: { text?: string }) => {
           if (block.text) {
-            wordCount += block.text.trim().split(/\s+/).length;
+            const words = block.text.trim().split(/\s+/).filter((w: string) => w.length > 0);
+            wordCount += words.length;
           }
         });
       });
