@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Loader2, FileText, CheckCircle, AlertCircle, Play } from 'lucide-react';
 import { WritingAssistant } from '@/components/WritingAssistant';
+import { DocumentEditor } from '@/components/DocumentEditor';
 
 interface Block {
   id: string;
@@ -140,47 +141,6 @@ export default function WorkspacePage({ params }: { params: { documentId: string
   
   const isAnalyzed = issues.length > 0 || doc.status === 'analyzed' || doc.status === 'ready';
 
-  const renderTextWithHighlights = (block: Block) => {
-    // Get issues for this block
-    const blockIssues = issues.filter(i => i.block_id === block.id && i.status === 'open');
-    const resolvedBlockIssues = issues.filter(i => i.block_id === block.id && i.status === 'resolved');
-    
-    let text = block.text || '';
-    
-    // For MVP, if there is a resolved issue, we just do a naive string replacement 
-    resolvedBlockIssues.forEach(iss => {
-      const acceptedSugg = iss.suggestions.find(s => s.status === 'accepted' || s.status === 'manually_edited');
-      if (acceptedSugg && acceptedSugg.suggested_text) {
-        text = text.replace(iss.original_text, acceptedSugg.suggested_text);
-      }
-    });
-
-    if (blockIssues.length === 0) return <span>{text}</span>;
-
-    // Simple highlight rendering for MVP: just split by the first open issue's original_text
-    const issue = blockIssues[0];
-    const parts = text.split(issue.original_text);
-    
-    if (parts.length < 2) return <span>{text}</span>;
-
-    return (
-      <>
-        {parts[0]}
-        <span 
-          onClick={() => setActiveIssueId(issue.id)}
-          className={`cursor-pointer transition-colors ${
-            activeIssueId === issue.id 
-              ? 'bg-[#FEF0C7] rounded px-0.5' // Soft amber background
-              : 'bg-accent/10 border-b border-accent/30 hover:bg-accent/20' // Subtle unselected
-          }`}
-        >
-          {issue.original_text}
-        </span>
-        {parts.slice(1).join(issue.original_text)}
-      </>
-    );
-  };
-
   const renderStatusIcon = (status: string) => {
     switch(status) {
       case 'processing':
@@ -214,10 +174,9 @@ export default function WorkspacePage({ params }: { params: { documentId: string
           <h3 className="text-[11px] font-semibold text-foreground-muted mb-3 uppercase tracking-wider">Outline</h3>
           {headings.length > 0 ? (
             <nav className="space-y-1">
-              {headings.map(h => (
+              {headings.map((h, i) => (
                 <button
-                  key={h.id}
-                  onClick={() => document.getElementById(`block-${h.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                  key={h.id || i}
                   className="block w-full text-left px-2 py-1.5 text-[13px] rounded hover:bg-background-secondary text-foreground-secondary hover:text-[#0B1628] truncate transition-colors"
                   style={{ paddingLeft: `${((h.level || 1) - 1) * 0.75 + 0.5}rem` }}
                 >
@@ -254,25 +213,8 @@ export default function WorkspacePage({ params }: { params: { documentId: string
           </div>
         </header>
 
-        {/* Scrollable Document Area */}
-        <div className="flex-1 overflow-y-auto px-4 py-8 md:px-12 md:py-12 flex justify-center scroll-smooth">
-          <div className="w-full max-w-[820px] bg-white shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-border-light p-10 sm:p-16 md:p-24 pb-32">
-            <div className="space-y-4">
-              {blocks.map(block => {
-                if (block.type === 'heading') {
-                  const HeaderTag = `h${Math.min(block.level || 1, 6)}` as keyof JSX.IntrinsicElements;
-                  const sizeClass = block.level === 1 ? 'text-[24px] font-bold mt-8 mb-4 text-[#0B1628]' : block.level === 2 ? 'text-[20px] font-semibold mt-6 mb-3 text-[#0B1628]' : 'text-[16px] font-semibold mt-4 mb-2 text-[#0B1628]';
-                  return <HeaderTag key={block.id} id={`block-${block.id}`} className={sizeClass}>{block.text}</HeaderTag>;
-                }
-                return (
-                  <p key={block.id} id={`block-${block.id}`} className={`text-[15px] leading-[1.7] transition-colors duration-300 ${activeIssue?.block_id === block.id ? 'text-[#0B1628]' : 'text-[#334155]'}`}>
-                    {renderTextWithHighlights(block)}
-                  </p>
-                );
-              })}
-            </div>
-          </div>
-        </div>
+        {/* Tiptap Document Editor Area */}
+        <DocumentEditor initialBlocks={blocks} isEditable={true} />
       </div>
 
       {/* 4. Right Panel: Writing Assistant */}
