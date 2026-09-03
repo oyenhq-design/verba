@@ -28,7 +28,15 @@ export async function signup(formData: FormData) {
     password: formData.get('password') as string,
   };
 
-  const { error } = await supabase.auth.signUp(data);
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || (process.env.NODE_ENV === 'production' ? '' : 'http://localhost:3001');
+  
+  const { error } = await supabase.auth.signUp({
+    email: data.email,
+    password: data.password,
+    options: {
+      emailRedirectTo: `${siteUrl}/auth/confirm`,
+    }
+  });
 
   if (error) {
     redirect('/signup?error=' + encodeURIComponent(error.message));
@@ -51,8 +59,10 @@ export async function resetPassword(formData: FormData) {
   const supabase = createClient();
   const email = formData.get('email') as string;
   
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || (process.env.NODE_ENV === 'production' ? '' : 'http://localhost:3001');
+
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/api/auth/callback?next=/account/update-password`,
+    redirectTo: `${siteUrl}/auth/confirm?next=/account/update-password`,
   });
 
   if (error) {
