@@ -1,15 +1,17 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { UploadCloud, MoreVertical, FileText, Loader2, AlertCircle } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 
 type DashboardDocument = {
   id: string;
-  name: string;
-  words: number;
-  quality: number;
+  original_filename: string;
+  word_count: number | null;
+  writing_quality_score: number | null;
   status: string;
-  updated: string;
+  analysis_status: string;
+  created_at: string;
 };
 
 export default function DashboardPage() {
@@ -18,6 +20,32 @@ export default function DashboardPage() {
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const supabase = createClient();
+
+  const fetchDocuments = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("documents")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        console.error("DASHBOARD_FETCH_FAILED", error);
+        setError("Failed to load documents from database.");
+        return;
+      }
+      
+      if (data) {
+        setDocuments(data as DashboardDocument[]);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  useEffect(() => {
+    fetchDocuments();
+  }, []);
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -29,7 +57,7 @@ export default function DashboardPage() {
     setIsDragging(false);
   };
 
-  const validateAndUpload = (file: File) => {
+  const validateAndUpload = async (file: File) => {
     setError(null);
     
     // Check file size (25MB)
@@ -45,20 +73,75 @@ export default function DashboardPage() {
       return;
     }
 
-    // Mock Upload Process
     setIsUploading(true);
-    setTimeout(() => {
-      const newDoc = {
-        id: Math.random().toString(36).substring(7),
-        name: file.name,
-        words: Math.floor(Math.random() * 5000) + 500,
-        quality: Math.floor(Math.random() * 40) + 50, // 50-90
-        status: "Ready",
-        updated: new Date().toLocaleDateString(),
-      };
-      setDocuments(prev => [newDoc, ...prev]);
+    
+    try {
+      const documentId = crypto.randomUUID();
+      const userId = '00000000-0000-0000-0000-000000000000'; // Placeholder for auth
+      const storagePath = `${userId}/${documentId}/original.docx`;
+
+      // 1. Upload to Supabase Storage
+      const { error: storageError } = await supabase.storage
+        .from('documents')
+        .upload(storagePath, file, {
+          cacheControl: '3600',
+          upsert: false
+        });
+
+      if (storageError) {
+        throw new Error(`STORAGE_UPLOAD_FAILED: ${storageError.message}`);
+      }
+
+      // 2. Insert record into Database
+      const { error: dbError } = await supabase
+        .from('documents')
+        .insert({
+          id: documentId,
+          user_id: userId,
+          title: file.name.replace('.docx', ''),
+          original_filename: file.name,
+          mime_type: file.type,
+          file_size: file.size,
+          storage_path: storagePath,
+          status: 'uploaded',
+          analysis_status: 'not_analyzed'
+        });
+
+      if (dbError) {
+        throw new Error(`DOCUMENT_RECORD_FAILED: ${dbError.message}`);
+      }
+
+      console.log({
+        message: "Upload successful, triggering parsing",
+        documentId,
+        filename: file.name,
+        storagePath
+      });
+
+      // Fetch immediately to show the 'uploaded' row
+      await fetchDocuments();
+
+      // 3. Trigger API processing route
+      const response = await fetch('/api/process', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ documentId: documentId })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(`DOCUMENT_PARSE_FAILED: ${errorData.error || 'Failed to process document'}`);
+      }
+
+      // Fetch again to show 'ready' and 'word_count'
+      await fetchDocuments();
+
+    } catch (err: unknown) {
+      console.error(err);
+      setError(err instanceof Error ? err.message : 'An unexpected error occurred.');
+    } finally {
       setIsUploading(false);
-    }, 2000);
+    }
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -156,36 +239,56 @@ export default function DashboardPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {documents.map(doc => (
-                  <tr key={doc.id} className="hover:bg-surface-secondary/50 transition-colors cursor-pointer" onClick={() => window.location.href = `/editor/${doc.id}`}>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <FileText className="w-4 h-4 text-accent" />
-                        <span className="font-medium">{doc.name}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-foreground-secondary">{doc.words}</td>
-                    <td className="px-6 py-4">
-                      <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-surface border border-border font-medium">
-                        <span className={doc.quality > 80 ? "text-status-success" : doc.quality > 60 ? "text-status-warning" : "text-status-error"}>
-                          {doc.quality}
+                {documents.map(doc => {
+                  const qualityDisplay = doc.writing_quality_score !== null 
+                    ? doc.writing_quality_score 
+                    : doc.analysis_status === 'analyzing' ? 'Analyzing...' 
+                    : doc.analysis_status === 'analyzed' ? 'Reviewed' 
+                    : 'Not analyzed';
+                  
+                  return (
+                    <tr key={doc.id} className="hover:bg-surface-secondary/50 transition-colors cursor-pointer" onClick={() => window.location.href = `/editor/${doc.id}`}>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <FileText className="w-4 h-4 text-accent" />
+                          <span className="font-medium">{doc.original_filename}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-foreground-secondary">{doc.word_count || '-'}</td>
+                      <td className="px-6 py-4">
+                        <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-surface border border-border font-medium">
+                          {doc.writing_quality_score !== null ? (
+                            <>
+                              <span className={doc.writing_quality_score > 80 ? "text-status-success" : doc.writing_quality_score > 60 ? "text-status-warning" : "text-status-error"}>
+                                {doc.writing_quality_score}
+                              </span>
+                              <span className="text-foreground-muted text-xs">/ 100</span>
+                            </>
+                          ) : (
+                            <span className="text-foreground-secondary">{qualityDisplay}</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${
+                          doc.status === 'ready' ? 'bg-status-success/10 text-status-success border-status-success/20' :
+                          doc.status === 'failed' ? 'bg-status-error/10 text-status-error border-status-error/20' :
+                          'bg-status-warning/10 text-status-warning border-status-warning/20'
+                        }`}>
+                          {doc.status.charAt(0).toUpperCase() + doc.status.slice(1)}
                         </span>
-                        <span className="text-foreground-muted text-xs">/ 100</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-status-success/10 text-status-success border border-status-success/20">
-                        {doc.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-foreground-secondary">{doc.updated}</td>
-                    <td className="px-6 py-4 text-right">
-                      <button className="text-foreground-muted hover:text-foreground transition-colors p-1" onClick={(e) => e.stopPropagation()}>
-                        <MoreVertical className="w-4 h-4" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className="px-6 py-4 text-foreground-secondary">
+                        {new Date(doc.created_at).toLocaleDateString()}
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <button className="text-foreground-muted hover:text-foreground transition-colors p-1" onClick={(e) => e.stopPropagation()}>
+                          <MoreVertical className="w-4 h-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
