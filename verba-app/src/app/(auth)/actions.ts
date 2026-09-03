@@ -30,7 +30,7 @@ export async function signup(formData: FormData) {
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || (process.env.NODE_ENV === 'production' ? '' : 'http://localhost:3001');
   
-  const { error } = await supabase.auth.signUp({
+  const { data: authData, error } = await supabase.auth.signUp({
     email: data.email,
     password: data.password,
     options: {
@@ -42,8 +42,12 @@ export async function signup(formData: FormData) {
     redirect('/signup?error=' + encodeURIComponent(error.message));
   }
 
-  revalidatePath('/', 'layout');
-  redirect('/dashboard');
+  if (authData?.session) {
+    revalidatePath('/', 'layout');
+    redirect('/dashboard');
+  } else {
+    redirect('/signup?message=' + encodeURIComponent('Check your email to complete registration.'));
+  }
 }
 
 export async function logout() {
