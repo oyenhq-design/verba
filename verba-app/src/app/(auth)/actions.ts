@@ -14,7 +14,7 @@ export async function login(formData: FormData) {
   const { error } = await supabase.auth.signInWithPassword(data);
 
   if (error) {
-    redirect('/login?error=' + encodeURIComponent(error.message));
+    redirect('/login?error=' + encodeURIComponent('Incorrect email or password.'));
   }
 
   revalidatePath('/', 'layout');
@@ -45,8 +45,10 @@ export async function signup(formData: FormData) {
   if (authData?.session) {
     revalidatePath('/', 'layout');
     redirect('/dashboard');
-  } else {
+  } else if (authData?.user) {
     redirect('/signup?message=' + encodeURIComponent('Check your email to complete registration.'));
+  } else {
+    redirect('/signup?error=' + encodeURIComponent('An unexpected error occurred.'));
   }
 }
 
