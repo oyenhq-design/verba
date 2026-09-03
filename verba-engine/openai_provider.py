@@ -43,7 +43,8 @@ Return JSON strictly following this schema:
                 {"role": "user", "content": prompt}
             ],
             response_format={"type": "json_object"},
-            temperature=0.2
+            temperature=0.2,
+            timeout=30.0
         )
         
         try:
@@ -78,7 +79,8 @@ Return JSON strictly following this schema:
                 {"role": "user", "content": prompt}
             ],
             response_format={"type": "json_object"},
-            temperature=0.7
+            temperature=0.7,
+            timeout=30.0
         )
         
         try:

@@ -40,7 +40,16 @@ export async function POST(request: Request) {
     const formData = new FormData();
     formData.append('file', fileData, 'document.docx');
 
-    const engineUrl = process.env.VERBA_ENGINE_URL || 'http://localhost:8000';
+    let engineUrl = process.env.VERBA_ENGINE_URL;
+    if (!engineUrl) {
+      if (process.env.NODE_ENV === 'production') {
+        return NextResponse.json(
+          { error: 'ENGINE_CONFIG_MISSING', message: 'VERBA_ENGINE_URL environment variable is missing.' },
+          { status: 500 }
+        );
+      }
+      engineUrl = 'http://localhost:8000';
+    }
     const engineResponse = await fetch(`${engineUrl}/api/parse`, {
       method: 'POST',
       body: formData,
