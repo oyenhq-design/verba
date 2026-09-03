@@ -3,7 +3,8 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, FileText, Settings, Plus } from 'lucide-react';
+import { Home, FileText, Settings, Plus, User, LogOut } from 'lucide-react';
+import { logout } from '@/app/(auth)/actions';
 
 export function SidebarNav() {
   const pathname = usePathname();
@@ -13,60 +14,90 @@ export function SidebarNav() {
     { name: 'Documents', href: '/documents', icon: FileText },
   ];
   
-  const bottomNav = [
+  const settingsNav = [
     { name: 'Settings', href: '/settings', icon: Settings },
   ];
 
+  const profileNav = [
+    { name: 'Account', href: '/account', icon: User },
+  ];
+
   return (
-    <div className="flex flex-col flex-1">
+    <div className="flex flex-col flex-1 h-full">
       <div className="p-4 pt-6">
         <Link 
           href="/dashboard"
-          className="flex items-center justify-center w-full h-[40px] bg-accent text-white font-semibold rounded-[6px] hover:bg-accent-hover transition-colors text-[14px]"
+          className="flex items-center justify-center w-full h-[44px] bg-accent text-white font-medium rounded-[8px] hover:bg-accent-hover transition-colors text-[14px] shadow-sm"
         >
-          <Plus size={16} className="mr-2" />
+          <Plus size={18} className="mr-2" />
           New document
         </Link>
       </div>
       
-      <nav className="flex-1 px-4 py-2 space-y-0.5">
+      <nav className="px-3 py-2 space-y-1">
         {primaryNav.map((item) => {
           const isActive = pathname === item.href;
           return (
             <Link 
               key={item.name} 
               href={item.href} 
-              className={`flex items-center px-3 py-2.5 h-[40px] text-[14px] font-medium transition-colors rounded-[6px] ${
+              className={`flex items-center px-3 py-2.5 h-[40px] text-[14px] font-medium transition-colors rounded-[8px] ${
                 isActive 
                   ? 'bg-accent/10 text-accent' 
-                  : 'text-foreground-secondary hover:bg-background-secondary hover:text-ink'
+                  : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
               }`}
             >
-              <item.icon size={16} className={`mr-3 shrink-0 ${isActive ? 'text-accent' : 'text-foreground-secondary'}`} />
+              <item.icon size={18} className={`mr-3 shrink-0 ${isActive ? 'text-accent' : 'text-slate-400'}`} />
               {item.name}
             </Link>
           );
         })}
       </nav>
-      
-      <div className="px-4 py-2 space-y-0.5 border-t border-border-light pt-4">
-        {bottomNav.map((item) => {
+
+      <div className="px-3 py-2 my-1 border-t border-slate-100">
+        {settingsNav.map((item) => {
           const isActive = pathname === item.href;
           return (
             <Link 
               key={item.name} 
               href={item.href} 
-              className={`flex items-center px-3 py-2.5 h-[40px] text-[14px] font-medium transition-colors rounded-[6px] ${
+              className={`flex items-center px-3 py-2.5 h-[40px] text-[14px] font-medium transition-colors rounded-[8px] ${
                 isActive 
                   ? 'bg-accent/10 text-accent' 
-                  : 'text-foreground-secondary hover:bg-background-secondary hover:text-ink'
+                  : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
               }`}
             >
-              <item.icon size={16} className={`mr-3 shrink-0 ${isActive ? 'text-accent' : 'text-foreground-secondary'}`} />
+              <item.icon size={18} className={`mr-3 shrink-0 ${isActive ? 'text-accent' : 'text-slate-400'}`} />
               {item.name}
             </Link>
           );
         })}
+      </div>
+      
+      <div className="mt-auto px-3 py-4 border-t border-slate-100 space-y-1">
+        {profileNav.map((item) => {
+          const isActive = pathname === item.href;
+          return (
+            <Link 
+              key={item.name} 
+              href={item.href} 
+              className={`flex items-center px-3 py-2.5 h-[40px] text-[14px] font-medium transition-colors rounded-[8px] ${
+                isActive 
+                  ? 'bg-accent/10 text-accent' 
+                  : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+              }`}
+            >
+              <item.icon size={18} className={`mr-3 shrink-0 ${isActive ? 'text-accent' : 'text-slate-400'}`} />
+              {item.name}
+            </Link>
+          );
+        })}
+        <form action={logout} className="w-full">
+          <button type="submit" className="flex items-center px-3 py-2.5 h-[40px] text-[14px] font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors rounded-[8px] w-full text-left">
+            <LogOut size={18} className="mr-3 shrink-0 text-slate-400" />
+            Sign out
+          </button>
+        </form>
       </div>
     </div>
   );

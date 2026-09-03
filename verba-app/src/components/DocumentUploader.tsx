@@ -136,119 +136,121 @@ export function DocumentUploader() {
   };
 
   return (
-    <div 
-      className={`w-full bg-white border rounded-[12px] p-6 transition-colors flex flex-col md:flex-row md:items-center justify-between shadow-sm gap-4
-        ${status === 'error' ? 'border-status-error bg-status-error/5' : 
-          status === 'selected' || isDragOver ? 'border-accent bg-accent/5' : 'border-border-light hover:border-border-dark'
-        }`}
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
-      style={{ minHeight: '120px' }}
-    >
-      {/* Left side info */}
-      <div className="flex items-center space-x-5">
-        <div className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0
-          ${status === 'empty' || status === 'error' ? 'bg-background-secondary text-foreground-secondary' : 
-            status === 'uploaded' ? 'bg-status-success/10 text-status-success' :
-            'bg-accent/10 text-accent'
+    <div className="bg-white rounded-[10px] p-1.5 shadow-[0_1px_2px_rgba(0,0,0,0.03)] border border-[#E5EAF0]">
+      <div 
+        className={`w-full rounded-[8px] p-5 transition-colors flex flex-col md:flex-row md:items-center justify-between gap-4 border border-dashed
+          ${status === 'error' ? 'border-status-error/50 bg-status-error/5' : 
+            status === 'selected' || isDragOver ? 'border-accent/50 bg-accent/5' : 'border-[#CBD5E1] hover:border-slate-400 bg-[#FAFAFA]'
           }`}
-        >
-          {status === 'uploaded' ? <CheckCircle size={24} /> : 
-           status === 'error' ? <AlertCircle size={24} /> :
-           (status === 'uploading' || status === 'processing') ? <Loader2 size={24} className="animate-spin" /> :
-           status === 'selected' ? <FileText size={24} /> :
-           <Upload size={24} />}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        style={{ minHeight: '120px' }}
+      >
+        {/* Left side info */}
+        <div className="flex items-center space-x-5">
+          <div className={`w-12 h-12 rounded-[10px] flex items-center justify-center shrink-0 shadow-sm
+            ${status === 'empty' || status === 'error' ? 'bg-white border border-[#E5EAF0] text-slate-600' : 
+              status === 'uploaded' ? 'bg-status-success/10 text-status-success border border-status-success/20' :
+              'bg-accent/10 text-accent border border-accent/20'
+            }`}
+          >
+            {status === 'uploaded' ? <CheckCircle size={22} /> : 
+             status === 'error' ? <AlertCircle size={22} /> :
+             (status === 'uploading' || status === 'processing') ? <Loader2 size={22} className="animate-spin" /> :
+             status === 'selected' ? <FileText size={22} /> :
+             <Upload size={22} />}
+          </div>
+          
+          <div>
+            {status === 'empty' && (
+              <>
+                <h3 className="text-[15px] font-semibold text-[#101828]">Upload a document</h3>
+                <p className="text-[14px] text-[#667085] mt-0.5">Drop a Word document here or select one from your computer.</p>
+                <p className="text-[12px] text-slate-400 mt-1 font-medium tracking-wide">DOCX &middot; Maximum 25 MB</p>
+              </>
+            )}
+
+            {status === 'selected' && file && (
+              <>
+                <h3 className="text-[15px] font-semibold text-[#101828]">{file.name}</h3>
+                <p className="text-[14px] text-[#667085] mt-0.5">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
+              </>
+            )}
+
+            {(status === 'uploading' || status === 'processing') && (
+              <>
+                <h3 className="text-[15px] font-semibold text-[#101828]">
+                  {status === 'uploading' ? 'Uploading document...' : 'Parsing document structure...'}
+                </h3>
+                <p className="text-[14px] text-[#667085] mt-0.5">
+                  {status === 'uploading' ? 'Securely storing your original file.' : 'Extracting headings and paragraphs.'}
+                </p>
+              </>
+            )}
+
+            {status === 'uploaded' && (
+              <>
+                <h3 className="text-[15px] font-semibold text-[#101828]">Document Ready!</h3>
+                <p className="text-[14px] text-[#667085] mt-0.5">Redirecting to your workspace...</p>
+              </>
+            )}
+
+            {status === 'error' && (
+              <>
+                <h3 className="text-[15px] font-semibold text-status-error">Processing Failed</h3>
+                <p className="text-[14px] text-[#667085] mt-0.5">{errorMessage}</p>
+              </>
+            )}
+          </div>
         </div>
-        
-        <div>
+
+        {/* Right side actions */}
+        <div className="shrink-0 flex items-center space-x-3">
           {status === 'empty' && (
-            <>
-              <h3 className="text-[16px] font-semibold text-ink">Upload a Word document</h3>
-              <p className="text-[14px] text-foreground-secondary mt-0.5">Drop your .docx here or browse from your computer.</p>
-              <p className="text-[12px] text-foreground-muted mt-1 font-medium tracking-wide">DOCX &middot; Maximum 25 MB</p>
-            </>
+            <button 
+              onClick={() => fileInputRef.current?.click()}
+              className="h-[38px] px-5 inline-flex items-center justify-center bg-white border border-[#E5EAF0] text-[#101828] font-semibold rounded-[8px] hover:bg-slate-50 hover:border-slate-300 transition-colors text-[14px] shadow-[0_1px_2px_rgba(0,0,0,0.02)]"
+            >
+              Choose document
+            </button>
           )}
 
-          {status === 'selected' && file && (
+          {status === 'selected' && (
             <>
-              <h3 className="text-[16px] font-semibold text-ink">{file.name}</h3>
-              <p className="text-[14px] text-foreground-secondary mt-0.5">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
-            </>
-          )}
-
-          {(status === 'uploading' || status === 'processing') && (
-            <>
-              <h3 className="text-[16px] font-semibold text-ink">
-                {status === 'uploading' ? 'Uploading document...' : 'Parsing document structure...'}
-              </h3>
-              <p className="text-[14px] text-foreground-secondary mt-0.5">
-                {status === 'uploading' ? 'Securely storing your original file.' : 'Extracting headings and paragraphs.'}
-              </p>
-            </>
-          )}
-
-          {status === 'uploaded' && (
-            <>
-              <h3 className="text-[16px] font-semibold text-ink">Document Ready!</h3>
-              <p className="text-[14px] text-foreground-secondary mt-0.5">Redirecting to your workspace...</p>
+              <button 
+                onClick={() => setStatus('empty')}
+                className="h-[38px] px-5 inline-flex items-center justify-center bg-white border border-[#E5EAF0] text-[#101828] font-medium rounded-[8px] hover:bg-slate-50 transition-colors text-[14px] shadow-[0_1px_2px_rgba(0,0,0,0.02)]"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleUpload}
+                className="h-[38px] px-5 inline-flex items-center justify-center bg-accent text-white font-semibold rounded-[8px] hover:bg-accent-hover transition-colors text-[14px] shadow-sm"
+              >
+                Upload
+              </button>
             </>
           )}
 
           {status === 'error' && (
-            <>
-              <h3 className="text-[16px] font-semibold text-status-error">Processing Failed</h3>
-              <p className="text-[14px] text-foreground-secondary mt-0.5">{errorMessage}</p>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* Right side actions */}
-      <div className="shrink-0 flex items-center space-x-3">
-        {status === 'empty' && (
-          <button 
-            onClick={() => fileInputRef.current?.click()}
-            className="h-[40px] px-5 inline-flex items-center justify-center bg-white border border-border-light text-ink font-semibold rounded-[8px] hover:bg-background-secondary transition-colors text-[14px]"
-          >
-            Choose document
-          </button>
-        )}
-
-        {status === 'selected' && (
-          <>
             <button 
               onClick={() => setStatus('empty')}
-              className="h-[40px] px-5 inline-flex items-center justify-center bg-white border border-border-light text-ink font-medium rounded-[8px] hover:bg-background-secondary transition-colors text-[14px]"
+              className="h-[38px] px-5 inline-flex items-center justify-center bg-white border border-[#E5EAF0] text-[#101828] font-semibold rounded-[8px] hover:bg-slate-50 transition-colors text-[14px] shadow-[0_1px_2px_rgba(0,0,0,0.02)]"
             >
-              Cancel
+              Try Again
             </button>
-            <button 
-              onClick={handleUpload}
-              className="h-[40px] px-5 inline-flex items-center justify-center bg-accent text-white font-semibold rounded-[8px] hover:bg-accent-hover transition-colors text-[14px]"
-            >
-              Upload
-            </button>
-          </>
-        )}
+          )}
+        </div>
 
-        {status === 'error' && (
-          <button 
-            onClick={() => setStatus('empty')}
-            className="h-[40px] px-5 inline-flex items-center justify-center bg-white border border-border-light text-ink font-semibold rounded-[8px] hover:bg-background-secondary transition-colors text-[14px]"
-          >
-            Try Again
-          </button>
-        )}
+        <input 
+          type="file" 
+          ref={fileInputRef}
+          className="hidden" 
+          accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+          onChange={handleFileChange}
+        />
       </div>
-
-      <input 
-        type="file" 
-        ref={fileInputRef}
-        className="hidden" 
-        accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        onChange={handleFileChange}
-      />
     </div>
   );
 }
