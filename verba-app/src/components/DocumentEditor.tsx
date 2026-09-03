@@ -1,11 +1,12 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { useEditor, EditorContent } from '@tiptap/react';
+import { useEditor, EditorContent, Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Underline from '@tiptap/extension-underline';
 import TextAlign from '@tiptap/extension-text-align';
 import { EditorToolbar } from './EditorToolbar';
+import { VerbaBlockId, IssueHighlight, IssueProp } from './editor/EditorExtensions';
 
 interface Block {
   id: string;
@@ -20,6 +21,10 @@ interface DocumentEditorProps {
   initialBlocks: Block[];
   isEditable?: boolean;
   zoomLevel?: number;
+  issues?: IssueProp[];
+  selectedIssueId?: string | null;
+  onIssueSelect?: (issueId: string | null) => void;
+  onEditorReady?: (editor: Editor) => void;
 }
 
 // Convert parser blocks into an HTML string that Tiptap can ingest securely
@@ -42,14 +47,22 @@ const blocksToHtml = (blocks: Block[]): string => {
 
     if (block.type === 'heading') {
       const level = Math.min(Math.max(block.level || 1, 1), 6);
-      return `<h${level}>${content}</h${level}>`;
+      return `<h${level} data-verba-block-id="${block.id}">${content}</h${level}>`;
     }
     
-    return `<p>${content}</p>`;
+    return `<p data-verba-block-id="${block.id}">${content}</p>`;
   }).join('');
 };
 
-export function DocumentEditor({ initialBlocks, isEditable = true, zoomLevel = 100 }: DocumentEditorProps) {
+export function DocumentEditor({ 
+  initialBlocks, 
+  isEditable = true, 
+  zoomLevel = 100,
+  issues = [],
+  selectedIssueId = null,
+  onIssueSelect = () => {},
+  onEditorReady
+}: DocumentEditorProps) {
   const [mounted, setMounted] = useState(false);
 
   const editor = useEditor({
@@ -63,6 +76,12 @@ export function DocumentEditor({ initialBlocks, isEditable = true, zoomLevel = 1
       TextAlign.configure({
         types: ['heading', 'paragraph'],
       }),
+      VerbaBlockId,
+      IssueHighlight.configure({
+        issues: issues,
+        selectedIssueId: selectedIssueId,
+        onIssueSelect: onIssueSelect,
+      }),
     ],
     content: '',
     editable: isEditable,
@@ -73,13 +92,31 @@ export function DocumentEditor({ initialBlocks, isEditable = true, zoomLevel = 1
     },
   });
 
+  // Update extension options when props change
+  useEffect(() => {
+    if (editor) {
+      editor.extensionManager.extensions.forEach(ext => {
+        if (ext.name === 'issueHighlight') {
+          ext.options.issues = issues;
+          ext.options.selectedIssueId = selectedIssueId;
+          ext.options.onIssueSelect = onIssueSelect;
+        }
+      });
+      // Force a transaction to trigger decoration update
+      editor.view.dispatch(editor.state.tr.setMeta('updateHighlight', true));
+    }
+  }, [editor, issues, selectedIssueId, onIssueSelect]);
+
   useEffect(() => {
     if (editor && initialBlocks.length > 0 && !mounted) {
       const htmlContent = blocksToHtml(initialBlocks);
       editor.commands.setContent(htmlContent);
       setMounted(true);
+      if (onEditorReady) {
+        onEditorReady(editor);
+      }
     }
-  }, [editor, initialBlocks, mounted]);
+  }, [editor, initialBlocks, mounted, onEditorReady]);
 
   if (!editor) {
     return null;

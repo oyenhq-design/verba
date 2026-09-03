@@ -6,9 +6,12 @@ export const dynamic = 'force-dynamic';
 export async function POST(request: Request) {
   const supabase = createClient();
   try {
-    const { documentId } = await request.json();
+    const { documentId, blocks: reqBlocks } = await request.json();
     if (!documentId) {
       return NextResponse.json({ error: 'Missing documentId' }, { status: 400 });
+    }
+    if (!Array.isArray(reqBlocks)) {
+      return NextResponse.json({ error: 'Missing or invalid blocks payload' }, { status: 400 });
     }
 
     const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -17,21 +20,21 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // 1. Fetch document and parsed content
+    // 1. Verify document ownership via RLS
     const { data: docData, error: docError } = await supabase
       .from('documents')
-      .select('parsed_content')
+      .select('id')
       .eq('id', documentId)
       .single();
 
-    if (docError || !docData || !docData.parsed_content) {
-      throw new Error(`Failed to fetch document: ${docError?.message}`);
+    if (docError || !docData) {
+      return NextResponse.json({ error: 'Document not found or unauthorized' }, { status: 404 });
     }
 
-    const blocks = docData.parsed_content.sections?.[0]?.blocks || [];
-    const paragraphs = blocks.filter((b: { type: string, text?: string }) => b.type === 'paragraph' && (b.text?.trim().length || 0) > 0);
+    // Filter to paragraphs with text
+    const paragraphs = reqBlocks.filter(b => b.type === 'paragraph' && typeof b.text === 'string' && b.text.trim().length > 0);
 
-    // 2. Fetch existing issues to avoid re-analysis
+    // 2. Fetch existing issues to avoid re-analysis of unchanged blocks
     const { data: existingIssues, error: issuesError } = await supabase
       .from('writing_issues')
       .select('block_id')
@@ -65,6 +68,7 @@ export async function POST(request: Request) {
           }
           engineUrl = 'http://localhost:8000';
         }
+        
         const engineResponse = await fetch(`${engineUrl}/api/analyze`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -85,6 +89,8 @@ export async function POST(request: Request) {
               const startOffset = block.text.indexOf(issue.original_text);
               const endOffset = startOffset !== -1 ? startOffset + issue.original_text.length : null;
 
+              if (startOffset === -1) continue; // safety check
+
               // Insert Issue
               const { data: insertedIssue, error: insertError } = await supabase
                 .from('writing_issues')
@@ -94,7 +100,7 @@ export async function POST(request: Request) {
                   issue_type: issue.type,
                   severity: issue.severity || 'medium',
                   original_text: issue.original_text,
-                  start_offset: startOffset !== -1 ? startOffset : null,
+                  start_offset: startOffset,
                   end_offset: endOffset,
                   explanation: issue.explanation,
                   status: 'open'
@@ -119,9 +125,9 @@ export async function POST(request: Request) {
               }
             }
           }
-          // Mark block as analyzed (even if no issues, we could track this in a separate table, 
-          // but for now, we just rely on `writing_issues` existence. If it has no issues, it will be re-analyzed next time.
-          // To fix this, we should really track analyzed blocks, but this is fine for MVP)
+          // Mark block as analyzed
+          // In a real system, track all analyzed blocks including zero-issue blocks in a `block_analysis` table.
+          // For MVP, if it returns 0 issues, it might be re-analyzed later.
         }
       } catch (err) {
         console.error(`Failed to analyze block ${block.id}`, err);

@@ -28,20 +28,42 @@ interface Props {
   isAnalyzed: boolean;
   isAnalyzing: boolean;
   onAnalyze: () => void;
+  issuesCount?: number;
+  docStatus?: string;
 }
 
-export function WritingAssistant({ documentId, blockId, paragraphText, issue, onClose, onSuggestionAction, isAnalyzed, isAnalyzing, onAnalyze }: Props) {
+export function WritingAssistant({ documentId, blockId, paragraphText, issue, onClose, onSuggestionAction, isAnalyzed, isAnalyzing, onAnalyze, issuesCount = 0, docStatus = '' }: Props) {
   const [loadingAlternative, setLoadingAlternative] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState('');
   
+  if (docStatus === 'failed') {
+    return (
+      <div className="flex flex-col items-center justify-center h-full text-center p-8 bg-white">
+        <Zap className="w-10 h-10 mb-4 text-status-error" />
+        <h3 className="text-[15px] font-semibold text-[#0B1628] mb-2">Analysis failed</h3>
+        <p className="text-[14px] text-foreground-secondary mb-6 leading-relaxed">
+          Analysis failed. Try again.
+        </p>
+        <button 
+          onClick={onAnalyze} 
+          disabled={isAnalyzing}
+          className="w-full h-[36px] flex items-center justify-center bg-accent text-white font-medium rounded-md hover:bg-accent-hover transition-colors text-[13px] disabled:opacity-50"
+        >
+          {isAnalyzing ? <Loader2 size={14} className="animate-spin mr-2" /> : <Play size={14} className="mr-2 fill-current" />}
+          Try Again
+        </button>
+      </div>
+    );
+  }
+
   if (!isAnalyzed) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-center p-8 bg-white">
         <Zap className="w-10 h-10 mb-4 text-accent/40" />
         <h3 className="text-[15px] font-semibold text-[#0B1628] mb-2">Writing Assistant</h3>
         <p className="text-[14px] text-foreground-secondary mb-6 leading-relaxed">
-          Analyze this document to find writing issues and get professional suggestions.
+          Analyze this document to identify writing issues.
         </p>
         <button 
           onClick={onAnalyze} 
@@ -55,13 +77,25 @@ export function WritingAssistant({ documentId, blockId, paragraphText, issue, on
     );
   }
 
+  if (isAnalyzed && issuesCount === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full text-center p-8 bg-white">
+        <Check className="w-10 h-10 mb-4 text-status-success" />
+        <h3 className="text-[15px] font-semibold text-[#0B1628] mb-2">Analysis complete</h3>
+        <p className="text-[14px] text-foreground-secondary leading-relaxed">
+          No writing issues were found.
+        </p>
+      </div>
+    );
+  }
+
   if (!issue) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-center p-8 bg-white">
         <ShieldCheck className="w-10 h-10 mb-4 text-foreground-muted" />
         <h3 className="text-[15px] font-semibold text-[#0B1628] mb-2">Analysis Complete</h3>
         <p className="text-[14px] text-foreground-secondary leading-relaxed">
-          Select a highlighted passage in your document to review the suggestion.
+          Select a highlighted passage to review Verba&apos;s suggestion.
         </p>
       </div>
     );
