@@ -1,10 +1,9 @@
-from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Body
-from fastapi.responses import Response, JSONResponse
+from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from docx_processor import DOCXProcessor
 from openai_provider import OpenAIProvider
 from safety_validator import SafetyValidator
-import json
 import os
 import sys
 from pydantic import BaseModel
@@ -20,10 +19,15 @@ if not os.getenv("OPENAI_API_KEY"):
 
 app = FastAPI(title="HumanDraft Python Service")
 
-# Allow Next.js frontend to communicate locally
+# Restrict CORS to expected frontends
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, restrict to frontend domain
+    allow_origins=[
+        "http://localhost:3000", 
+        "http://localhost:3001",
+        "https://app.verba.com"
+    ],
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -42,13 +46,13 @@ class AlternativeRequest(BaseModel):
 
 @app.get("/health")
 def health_check():
-    return {"status": "ok"}
+    return {"status": "ok", "service": "verba-engine"}
 
 @app.post("/api/parse")
 async def parse_docx(file: UploadFile = File(...)):
     """Accepts a .docx file and returns the JSON DocumentModel structure."""
     if not file.filename.endswith('.docx'):
-        raise HTTPException(status_code=400, detail="Only .docx files are supported")
+        return JSONResponse(status_code=400, content={"error": "INVALID_FILE_TYPE", "message": "Only .docx files are supported"})
     
     contents = await file.read()
     try:
@@ -57,7 +61,7 @@ async def parse_docx(file: UploadFile = File(...)):
         processor.cleanup()
         return JSONResponse(content=json_data)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return JSONResponse(status_code=500, content={"error": "DOCUMENT_PARSE_FAILED", "message": f"Unable to parse document. Error: {str(e)}"})
 
 @app.post("/api/analyze")
 async def analyze_block(req: AnalyzeRequest):
@@ -82,7 +86,7 @@ async def analyze_block(req: AnalyzeRequest):
                 
         return result
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return JSONResponse(status_code=500, content={"error": "ANALYSIS_FAILED", "message": f"Unable to analyze block. Error: {str(e)}"})
 
 @app.post("/api/analyze/alternative")
 async def analyze_alternative(req: AlternativeRequest):
@@ -92,14 +96,13 @@ async def analyze_alternative(req: AlternativeRequest):
         
         # Ensure the alternative preserves protected entities
         if not SafetyValidator.validate_suggestion(req.issue["original_text"], result["suggested_text"]):
-            raise HTTPException(status_code=400, detail="Generated alternative failed safety validation.")
+            return JSONResponse(status_code=400, content={"error": "SAFETY_VALIDATION_FAILED", "message": "Generated alternative failed safety validation."})
             
         return result
-    except HTTPException:
-        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return JSONResponse(status_code=500, content={"error": "ALTERNATIVE_GENERATION_FAILED", "message": f"Unable to generate alternative. Error: {str(e)}"})
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False)
