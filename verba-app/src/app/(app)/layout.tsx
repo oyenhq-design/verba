@@ -1,5 +1,6 @@
 import React from 'react';
 import Link from 'next/link';
+import { logout } from '@/app/(auth)/actions';
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -32,9 +33,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           <Link href="/settings" className="flex items-center px-3 py-2 text-[14px] font-medium text-foreground-secondary hover:bg-background-secondary hover:text-ink transition-colors rounded-md">
             Settings
           </Link>
-          <button className="flex items-center px-3 py-2 text-[14px] font-medium text-foreground-secondary hover:bg-background-secondary hover:text-ink transition-colors rounded-md w-full text-left">
-            Account
-          </button>
+          <form action={logout} className="w-full">
+            <button type="submit" className="flex items-center px-3 py-2 text-[14px] font-medium text-foreground-secondary hover:bg-background-secondary hover:text-ink transition-colors rounded-md w-full text-left">
+              Sign out
+            </button>
+          </form>
         </div>
       </aside>
 

@@ -1,19 +1,16 @@
 import React from 'react';
 import Link from 'next/link';
-import { signup } from '../actions';
+import { resetPassword } from '../actions';
 import { AlertCircle, CheckCircle } from 'lucide-react';
 
-export default function SignupPage({ searchParams }: { searchParams: { error?: string, message?: string } }) {
+export default function ForgotPasswordPage({ searchParams }: { searchParams: { error?: string, message?: string } }) {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background-pale px-4 py-12 sm:px-6 lg:px-8">
       <div className="w-full max-w-md space-y-8 bg-white p-10 rounded-[16px] shadow-sm border border-border-light">
         <div className="text-center">
-          <h2 className="text-[28px] font-bold tracking-tight text-ink">Create an account</h2>
+          <h2 className="text-[28px] font-bold tracking-tight text-ink">Reset Password</h2>
           <p className="mt-2 text-[14px] text-foreground-secondary">
-            Already have an account?{' '}
-            <Link href="/login" className="font-semibold text-accent hover:text-accent-hover transition-colors">
-              Sign in
-            </Link>
+            Enter your email to receive a password reset link.
           </p>
         </div>
 
@@ -31,7 +28,7 @@ export default function SignupPage({ searchParams }: { searchParams: { error?: s
           </div>
         )}
 
-        <form className="mt-8 space-y-6" action={signup}>
+        <form className="mt-8 space-y-6" action={resetPassword}>
           <div className="space-y-4 rounded-md shadow-sm">
             <div>
               <label htmlFor="email" className="sr-only">Email address</label>
@@ -45,17 +42,13 @@ export default function SignupPage({ searchParams }: { searchParams: { error?: s
                 placeholder="Email address"
               />
             </div>
-            <div>
-              <label htmlFor="password" className="sr-only">Password</label>
-              <input
-                id="password"
-                name="password"
-                type="password"
-                autoComplete="new-password"
-                required
-                className="relative block w-full rounded-md border border-border-light px-3 py-2 text-ink placeholder-foreground-muted focus:z-10 focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent sm:text-sm"
-                placeholder="Password"
-              />
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div className="text-sm">
+              <Link href="/login" className="font-semibold text-accent hover:text-accent-hover transition-colors">
+                Back to login
+              </Link>
             </div>
           </div>
 
@@ -64,7 +57,7 @@ export default function SignupPage({ searchParams }: { searchParams: { error?: s
               type="submit"
               className="group relative flex w-full justify-center rounded-md bg-accent px-3 py-2 text-sm font-semibold text-white hover:bg-accent-hover focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 transition-colors h-[40px] items-center"
             >
-              Sign up
+              Send Reset Link
             </button>
           </div>
         </form>

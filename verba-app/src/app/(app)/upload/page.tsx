@@ -55,7 +55,13 @@ export default function UploadPage() {
 
       // 1. Upload to Supabase Storage
       const documentId = crypto.randomUUID(); // Temporary stable ID for this session
-      const userId = '00000000-0000-0000-0000-000000000000'; // Placeholder for auth
+      
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) {
+        throw new Error('You must be logged in to upload a document.');
+      }
+      
+      const userId = user.id;
       const storagePath = `${userId}/${documentId}/original.docx`;
 
       const { error: storageError } = await supabase.storage

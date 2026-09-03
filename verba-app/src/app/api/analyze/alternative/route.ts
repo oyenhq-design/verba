@@ -1,13 +1,20 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
+  const supabase = createClient();
   try {
     const { documentId, blockId, issueId, paragraphText } = await request.json();
     if (!documentId || !blockId || !issueId || !paragraphText) {
       return NextResponse.json({ error: 'Missing required parameters' }, { status: 400 });
+    }
+
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // Fetch existing issue and previous suggestion
