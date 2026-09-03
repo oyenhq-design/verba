@@ -52,6 +52,7 @@ export default function WorkspacePage({ params }: { params: { documentId: string
   const [loading, setLoading] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
   const [error, setError] = useState('');
+  const [analyzeError, setAnalyzeError] = useState<string | null>(null);
   
   // Workspace Layout State
   const [isFocusMode, setIsFocusMode] = useState(false);
@@ -124,6 +125,7 @@ export default function WorkspacePage({ params }: { params: { documentId: string
   const handleAnalyze = async () => {
     if (!editorRef.current) return;
     setAnalyzing(true);
+    setAnalyzeError(null);
     
     try {
       // Extract current editor blocks to send for analysis
@@ -145,16 +147,24 @@ export default function WorkspacePage({ params }: { params: { documentId: string
           blocks: currentBlocks
         })
       });
+
+      const resData = await res.json();
       
-      if (res.ok) {
+      if (res.ok && resData.success) {
+        // Genuine success — reload issues from Supabase
         await loadData();
         setIsAssistantOpen(true);
       } else {
-        const errorData = await res.json();
-        console.error('Analysis failed:', errorData);
+        // Engine returned a structured failure (502) or orchestration error (500)
+        const failMsg = resData.message || 'Analysis failed. Please try again.';
+        console.error('[handleAnalyze] Engine error:', resData.error, failMsg);
+        setAnalyzeError(failMsg);
+        setIsAssistantOpen(true); // Open assistant so user sees the error
       }
     } catch (e) {
-      console.error(e);
+      console.error('[handleAnalyze] Network error:', e);
+      setAnalyzeError('Could not reach the analysis service. Please check your connection.');
+      setIsAssistantOpen(true);
     } finally {
       setAnalyzing(false);
     }
@@ -419,6 +429,7 @@ export default function WorkspacePage({ params }: { params: { documentId: string
             onAnalyze={handleAnalyze}
             issuesCount={issues.filter(i => i.status === 'open').length}
             docStatus={doc.status}
+            analyzeError={analyzeError}
           />
         </aside>
       )}
