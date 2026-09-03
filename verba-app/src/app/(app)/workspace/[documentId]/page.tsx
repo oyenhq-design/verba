@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/lib/supabase/client';
 import { Loader2, Sparkles } from 'lucide-react';
 import { WritingAssistant } from '@/components/WritingAssistant';
 
@@ -45,6 +45,8 @@ export default function WorkspacePage({ params }: { params: { documentId: string
   const [loading, setLoading] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
   const [error, setError] = useState('');
+  
+  const supabase = createClient();
 
   const loadData = async () => {
     try {

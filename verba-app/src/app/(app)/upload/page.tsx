@@ -3,7 +3,7 @@
 import React, { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Upload, FileText, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/lib/supabase/client';
 
 export default function UploadPage() {
   const router = useRouter();
@@ -12,6 +12,8 @@ export default function UploadPage() {
   const [file, setFile] = useState<File | null>(null);
   const [status, setStatus] = useState<'empty' | 'selected' | 'uploading' | 'processing' | 'uploaded' | 'error'>('empty');
   const [errorMessage, setErrorMessage] = useState('');
+  
+  const supabase = createClient();
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
