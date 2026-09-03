@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Check, X, RefreshCw, Edit2, Loader2, ShieldCheck } from 'lucide-react';
+import { Check, X, RefreshCw, Edit2, Loader2, ShieldCheck, Zap, Play } from 'lucide-react';
 
 interface Suggestion {
   id: string;
@@ -25,18 +25,44 @@ interface Props {
   issue: Issue | null;
   onClose: () => void;
   onSuggestionAction: (issueId: string, suggestionId: string, action: 'accepted' | 'rejected' | 'manually_edited', newText?: string) => void;
+  isAnalyzed: boolean;
+  isAnalyzing: boolean;
+  onAnalyze: () => void;
 }
 
-export function WritingAssistant({ documentId, blockId, paragraphText, issue, onClose, onSuggestionAction }: Props) {
+export function WritingAssistant({ documentId, blockId, paragraphText, issue, onClose, onSuggestionAction, isAnalyzed, isAnalyzing, onAnalyze }: Props) {
   const [loadingAlternative, setLoadingAlternative] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState('');
   
+  if (!isAnalyzed) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full text-center p-8 bg-white">
+        <Zap className="w-10 h-10 mb-4 text-accent/40" />
+        <h3 className="text-[15px] font-semibold text-[#0B1628] mb-2">Writing Assistant</h3>
+        <p className="text-[14px] text-foreground-secondary mb-6 leading-relaxed">
+          Analyze this document to find writing issues and get professional suggestions.
+        </p>
+        <button 
+          onClick={onAnalyze} 
+          disabled={isAnalyzing}
+          className="w-full h-[36px] flex items-center justify-center bg-accent text-white font-medium rounded-md hover:bg-accent-hover transition-colors text-[13px] disabled:opacity-50"
+        >
+          {isAnalyzing ? <Loader2 size={14} className="animate-spin mr-2" /> : <Play size={14} className="mr-2 fill-current" />}
+          Analyze Document
+        </button>
+      </div>
+    );
+  }
+
   if (!issue) {
     return (
-      <div className="flex flex-col items-center justify-center h-full text-foreground-secondary text-center p-6">
-        <ShieldCheck className="w-12 h-12 mb-4 text-border-light" />
-        <p className="text-[14px]">Select a highlighted passage in your document to view suggestions.</p>
+      <div className="flex flex-col items-center justify-center h-full text-center p-8 bg-white">
+        <ShieldCheck className="w-10 h-10 mb-4 text-foreground-muted" />
+        <h3 className="text-[15px] font-semibold text-[#0B1628] mb-2">Analysis Complete</h3>
+        <p className="text-[14px] text-foreground-secondary leading-relaxed">
+          Select a highlighted passage in your document to review the suggestion.
+        </p>
       </div>
     );
   }
@@ -59,8 +85,6 @@ export function WritingAssistant({ documentId, blockId, paragraphText, issue, on
       if (res.ok) {
         const data = await res.json();
         if (data.suggestion) {
-          // Typically we would lift this state up or trigger a re-fetch of the issue.
-          // For now, we mutate locally for fast UI response, then tell parent to refresh.
           issue.suggestions.push(data.suggestion);
         }
       }
@@ -85,49 +109,44 @@ export function WritingAssistant({ documentId, blockId, paragraphText, issue, on
   const formatIssueType = (type: string) => type.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 
   return (
-    <div className="flex flex-col h-full bg-white">
-      <div className="flex items-center justify-between p-4 border-b border-border-light">
-        <h3 className="text-[14px] font-semibold text-ink uppercase tracking-wider">
+    <div className="flex flex-col h-full bg-white relative">
+      <div className="flex items-center justify-between p-4 border-b border-border-light bg-white sticky top-0 z-10 shrink-0">
+        <h3 className="text-[13px] font-semibold text-[#0B1628] uppercase tracking-wider">
           {formatIssueType(issue.issue_type)}
         </h3>
-        <button onClick={onClose} className="p-1 hover:bg-background-secondary rounded text-foreground-secondary">
+        <button onClick={onClose} className="p-1 hover:bg-background-secondary rounded text-foreground-secondary hover:text-[#0B1628] transition-colors">
           <X size={16} />
         </button>
       </div>
       
-      <div className="p-5 flex-1 overflow-y-auto space-y-6">
+      <div className="p-5 flex-1 overflow-y-auto space-y-7">
         
-        {/* Explanation */}
-        <div className="bg-background-secondary p-4 rounded-lg">
-          <p className="text-[14px] text-ink-secondary">{activeSuggestion?.explanation || issue.explanation}</p>
-        </div>
-
         {/* Original */}
         <div>
-          <h4 className="text-[12px] font-semibold text-foreground-muted uppercase tracking-wider mb-2">Original</h4>
-          <p className="text-[14px] text-ink bg-status-error bg-opacity-10 p-3 rounded-md line-through decoration-status-error/50">
+          <h4 className="text-[11px] font-semibold text-foreground-secondary uppercase tracking-wider mb-2">Original</h4>
+          <p className="text-[14px] text-ink bg-[#FEF0C7]/30 border border-[#FEF0C7] p-3 rounded-md line-through decoration-[#F59E0B]/50 leading-relaxed">
             {issue.original_text}
           </p>
         </div>
 
         {/* Suggested */}
         <div>
-          <h4 className="text-[12px] font-semibold text-foreground-muted uppercase tracking-wider mb-2">Suggested</h4>
+          <h4 className="text-[11px] font-semibold text-foreground-secondary uppercase tracking-wider mb-2">Suggested</h4>
           {isEditing ? (
             <div className="space-y-2">
               <textarea 
                 value={editText}
                 onChange={(e) => setEditText(e.target.value)}
-                className="w-full min-h-[100px] text-[14px] text-ink border border-accent rounded-md p-3 focus:outline-none focus:ring-1 focus:ring-accent"
+                className="w-full min-h-[100px] text-[14px] text-ink border border-accent rounded-md p-3 focus:outline-none focus:ring-1 focus:ring-accent leading-relaxed bg-white"
               />
               <div className="flex justify-end space-x-2">
-                <button onClick={() => setIsEditing(false)} className="text-[12px] px-3 py-1 text-foreground-secondary hover:bg-background-secondary rounded">Cancel</button>
-                <button onClick={handleSaveEdit} className="text-[12px] px-3 py-1 bg-accent text-white rounded hover:bg-accent-hover">Save Edit</button>
+                <button onClick={() => setIsEditing(false)} className="text-[12px] font-medium px-3 py-1.5 text-foreground-secondary hover:bg-background-secondary rounded transition-colors">Cancel</button>
+                <button onClick={handleSaveEdit} className="text-[12px] font-medium px-3 py-1.5 bg-accent text-white rounded hover:bg-accent-hover transition-colors">Save Edit</button>
               </div>
             </div>
           ) : (
             <div className="group relative">
-              <p className="text-[14px] text-ink bg-status-success bg-opacity-10 p-3 rounded-md">
+              <p className="text-[14px] text-ink bg-status-success/10 border border-status-success/20 p-3 rounded-md leading-relaxed">
                 {activeSuggestion?.suggested_text}
               </p>
               <button 
@@ -141,25 +160,33 @@ export function WritingAssistant({ documentId, blockId, paragraphText, issue, on
           )}
         </div>
 
+        {/* Explanation */}
+        <div>
+          <h4 className="text-[11px] font-semibold text-foreground-secondary uppercase tracking-wider mb-2">Why</h4>
+          <p className="text-[13px] text-foreground-secondary leading-relaxed bg-background-pale p-3 rounded-md border border-border-light">
+            {activeSuggestion?.explanation || issue.explanation}
+          </p>
+        </div>
+
         {/* Protected Items Checklist */}
         <div>
-           <h4 className="text-[12px] font-semibold text-foreground-muted uppercase tracking-wider mb-2 flex items-center gap-1">
-             <ShieldCheck size={14} /> Safety Checks
+           <h4 className="text-[11px] font-semibold text-foreground-secondary uppercase tracking-wider mb-2 flex items-center gap-1.5">
+             <ShieldCheck size={14} className="text-foreground-secondary" /> Protected
            </h4>
-           <ul className="text-[13px] text-status-success space-y-1">
-             <li className="flex items-center gap-2"><Check size={14} /> Meaning preserved</li>
-             <li className="flex items-center gap-2"><Check size={14} /> Numbers & Units</li>
-             <li className="flex items-center gap-2"><Check size={14} /> Citations</li>
+           <ul className="text-[13px] text-foreground-secondary space-y-1.5">
+             <li className="flex items-center gap-2"><Check size={14} className="text-status-success" /> <span className="text-[#0B1628]">Meaning preserved</span></li>
+             <li className="flex items-center gap-2"><Check size={14} className="text-status-success" /> <span className="text-[#0B1628]">Numbers & Units</span></li>
+             <li className="flex items-center gap-2"><Check size={14} className="text-status-success" /> <span className="text-[#0B1628]">Citations</span></li>
            </ul>
         </div>
       </div>
 
       {/* Actions */}
-      <div className="p-4 border-t border-border-light bg-background-pale space-y-3">
+      <div className="p-4 border-t border-border-light bg-white shrink-0 space-y-3 z-10">
         <div className="flex space-x-2">
           <button 
             onClick={() => activeSuggestion && onSuggestionAction(issue.id, activeSuggestion.id, 'rejected')}
-            className="flex-1 h-[36px] bg-white border border-border-light text-ink rounded-md hover:bg-background-secondary transition-colors text-[13px] font-medium"
+            className="flex-1 h-[36px] bg-white border border-border-light text-[#0B1628] rounded-md hover:bg-background-secondary transition-colors text-[13px] font-medium"
           >
             Reject
           </button>
