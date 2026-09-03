@@ -15,7 +15,13 @@ import {
   Heading1,
   Heading2,
   Heading3,
-  Type
+  Type,
+  List,
+  ListOrdered,
+  IndentIncrease,
+  IndentDecrease,
+  MoreHorizontal,
+  ChevronDown
 } from 'lucide-react';
 
 interface EditorToolbarProps {
@@ -53,7 +59,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
     children 
   }: { 
     isActive?: boolean; 
-    onClick: () => void; 
+    onClick?: () => void; 
     disabled?: boolean; 
     children: React.ReactNode; 
   }) => (
@@ -69,61 +75,100 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
     </button>
   );
 
-  const Divider = () => <div className="w-[1px] h-[24px] bg-slate-200 mx-1" />;
+  const Divider = () => <div className="w-[1px] h-[20px] bg-slate-200 mx-2" />;
 
   return (
-    <div className="flex items-center px-4 py-2 space-x-1 overflow-x-auto">
+    <div className="flex items-center px-4 py-2 space-x-1 overflow-x-auto bg-[#F6F8FB] border-b border-border-light">
       {/* History */}
       <ToolbarButton onClick={undo} disabled={!editor.can().undo()}>
-        <Undo size={18} />
+        <Undo size={16} />
       </ToolbarButton>
       <ToolbarButton onClick={redo} disabled={!editor.can().redo()}>
-        <Redo size={18} />
+        <Redo size={16} />
       </ToolbarButton>
 
       <Divider />
 
       {/* Styles */}
       <ToolbarButton onClick={setParagraph} isActive={editor.isActive('paragraph')}>
-        <Type size={18} />
+        <Type size={16} />
       </ToolbarButton>
       <ToolbarButton onClick={() => setHeading(1)} isActive={editor.isActive('heading', { level: 1 })}>
-        <Heading1 size={18} />
+        <Heading1 size={16} />
       </ToolbarButton>
       <ToolbarButton onClick={() => setHeading(2)} isActive={editor.isActive('heading', { level: 2 })}>
-        <Heading2 size={18} />
+        <Heading2 size={16} />
       </ToolbarButton>
       <ToolbarButton onClick={() => setHeading(3)} isActive={editor.isActive('heading', { level: 3 })}>
-        <Heading3 size={18} />
+        <Heading3 size={16} />
       </ToolbarButton>
+
+      <Divider />
+
+      {/* Fonts (Mock for now) */}
+      <div className="flex items-center mx-1 px-2 py-1 rounded hover:bg-slate-200 cursor-not-allowed opacity-50 text-slate-600 transition-colors">
+        <span className="text-[13px] mr-1">Inter</span>
+        <ChevronDown size={14} />
+      </div>
+      <div className="flex items-center mx-1 px-2 py-1 rounded hover:bg-slate-200 cursor-not-allowed opacity-50 text-slate-600 transition-colors">
+        <span className="text-[13px] mr-1">11</span>
+        <ChevronDown size={14} />
+      </div>
 
       <Divider />
 
       {/* Text Marks */}
       <ToolbarButton onClick={toggleBold} isActive={editor.isActive('bold')} disabled={!editor.can().toggleBold()}>
-        <Bold size={18} />
+        <Bold size={16} />
       </ToolbarButton>
       <ToolbarButton onClick={toggleItalic} isActive={editor.isActive('italic')} disabled={!editor.can().toggleItalic()}>
-        <Italic size={18} />
+        <Italic size={16} />
       </ToolbarButton>
       <ToolbarButton onClick={toggleUnderline} isActive={editor.isActive('underline')} disabled={!editor.can().toggleUnderline()}>
-        <Underline size={18} />
+        <Underline size={16} />
       </ToolbarButton>
 
       <Divider />
 
       {/* Alignment */}
       <ToolbarButton onClick={() => setAlign('left')} isActive={editor.isActive({ textAlign: 'left' })}>
-        <AlignLeft size={18} />
+        <AlignLeft size={16} />
       </ToolbarButton>
       <ToolbarButton onClick={() => setAlign('center')} isActive={editor.isActive({ textAlign: 'center' })}>
-        <AlignCenter size={18} />
+        <AlignCenter size={16} />
       </ToolbarButton>
       <ToolbarButton onClick={() => setAlign('right')} isActive={editor.isActive({ textAlign: 'right' })}>
-        <AlignRight size={18} />
+        <AlignRight size={16} />
       </ToolbarButton>
       <ToolbarButton onClick={() => setAlign('justify')} isActive={editor.isActive({ textAlign: 'justify' })}>
-        <AlignJustify size={18} />
+        <AlignJustify size={16} />
+      </ToolbarButton>
+
+      <Divider />
+
+      {/* Lists (Mocked) */}
+      <ToolbarButton disabled={true}>
+        <List size={16} />
+      </ToolbarButton>
+      <ToolbarButton disabled={true}>
+        <ListOrdered size={16} />
+      </ToolbarButton>
+
+      <Divider />
+
+      {/* Indent (Mocked) */}
+      <ToolbarButton disabled={true}>
+        <IndentDecrease size={16} />
+      </ToolbarButton>
+      <ToolbarButton disabled={true}>
+        <IndentIncrease size={16} />
+      </ToolbarButton>
+
+      <Divider />
+
+      {/* More (Mocked) */}
+      <ToolbarButton disabled={true}>
+        <MoreHorizontal size={16} />
       </ToolbarButton>
     </div>
   );
