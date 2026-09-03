@@ -89,6 +89,20 @@ export default function WorkspacePage({ params }: { params: { documentId: string
 
   useEffect(() => {
     loadData();
+    
+    // Load local storage preferences
+    const savedZoom = localStorage.getItem('verba_editor_zoom');
+    if (savedZoom) setZoomLevel(parseInt(savedZoom));
+    
+    const savedOutline = localStorage.getItem('verba_editor_outline');
+    if (savedOutline !== null) setIsOutlineOpen(savedOutline === 'true');
+    
+    const savedAssistant = localStorage.getItem('verba_editor_assistant');
+    // Only apply assistant default if we haven't already opened it due to issues existing
+    if (savedAssistant === 'true' && issues.length === 0) {
+      setIsAssistantOpen(true);
+    }
+    
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.documentId]);
 
