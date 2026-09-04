@@ -3,9 +3,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import {
-  Loader2, FileText, CheckCircle, AlertCircle, Play,
+  Loader2, FileText, CheckCircle, Play,
   Maximize, Minimize, List as ListIcon,
-  PanelRightClose, PanelRightOpen, ChevronDown, CloudOff, Cloud,
+  PanelRightClose, PanelRightOpen, ChevronDown, CloudOff, Cloud, Save,
 } from 'lucide-react';
 import { WritingAssistant } from '@/components/WritingAssistant';
 import { DocumentEditor } from '@/components/DocumentEditor';
@@ -63,8 +63,7 @@ function countWordsFromTiptapJson(json: Record<string, any>): number {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const walk = (node: Record<string, any>) => {
     if (node.type === 'text' && typeof node.text === 'string') {
-      const words = node.text.trim().split(/\s+/).filter((w: string) => w.length > 0);
-      count += words.length;
+      count += node.text.trim().split(/\s+/).filter((w: string) => w.length > 0).length;
     }
     if (Array.isArray(node.content)) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -86,12 +85,14 @@ export default function WorkspacePage({ params }: { params: { documentId: string
   const [error, setError] = useState('');
   const [analyzeError, setAnalyzeError] = useState<string | null>(null);
 
-  // Live word count (updated from editor on every save)
+  // Live word count (updated on every save)
   const [liveWordCount, setLiveWordCount] = useState<number | null>(null);
+
+  // Autosave preference — null = still loading (prevents premature autosave)
+  const [autosaveEnabled, setAutosaveEnabled] = useState<boolean | null>(null);
 
   // Save state machine
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved');
-  // Track the current DB version so we can do stale-write protection
   const versionRef = useRef<number>(0);
 
   // Workspace Layout State
@@ -102,12 +103,15 @@ export default function WorkspacePage({ params }: { params: { documentId: string
   const [showZoomMenu, setShowZoomMenu] = useState(false);
 
   const editorRef = useRef<Editor | null>(null);
-  // Pending autosave timeout handle
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Whether there is an in-flight save request
   const savingRef = useRef(false);
-  // The latest JSON that needs to be saved (may differ from what's in-flight)
   const pendingJsonRef = useRef<Record<string, unknown> | null>(null);
+  // Ref so Ctrl+S handler always has fresh value without re-registering
+  const autosaveEnabledRef = useRef<boolean | null>(null);
+  const saveStatusRef = useRef<SaveStatus>('saved');
+
+  useEffect(() => { autosaveEnabledRef.current = autosaveEnabled; }, [autosaveEnabled]);
+  useEffect(() => { saveStatusRef.current = saveStatus; }, [saveStatus]);
 
   const supabase = createClient();
 
@@ -136,27 +140,46 @@ export default function WorkspacePage({ params }: { params: { documentId: string
       }
     } catch (err: unknown) {
       console.error('[loadData]', err);
-      const msg = err instanceof Error ? err.message : 'Failed to load document';
-      setError(msg);
+      setError(err instanceof Error ? err.message : 'Failed to load document');
     } finally {
       setLoading(false);
     }
   }, [params.documentId, supabase]);
 
+  // ─── Bootstrap: load document + preferences in parallel ─────────────────
+
   useEffect(() => {
-    loadData();
+    const bootstrap = async () => {
+      // Load layout prefs from localStorage
+      try {
+        const savedZoom = localStorage.getItem('verba_editor_zoom');
+        if (savedZoom) setZoomLevel(parseInt(savedZoom, 10));
+        const savedOutline = localStorage.getItem('verba_editor_outline');
+        if (savedOutline !== null) setIsOutlineOpen(savedOutline === 'true');
+      } catch {/* ignore */}
 
-    // Load editor preferences from localStorage
-    const savedZoom = localStorage.getItem('verba_editor_zoom');
-    if (savedZoom) setZoomLevel(parseInt(savedZoom, 10));
+      // Load document and autosave preference concurrently.
+      // autosaveEnabled stays null until the preference resolves —
+      // this prevents any accidental autosave before the setting is known.
+      await Promise.all([
+        loadData(),
+        fetch('/api/preferences')
+          .then(r => r.ok ? r.json() : null)
+          .then(data => {
+            const enabled = (data && typeof data.autosave_enabled === 'boolean')
+              ? data.autosave_enabled
+              : true; // default
+            setAutosaveEnabled(enabled);
+          })
+          .catch(() => setAutosaveEnabled(true)), // default on network error
+      ]);
+    };
 
-    const savedOutline = localStorage.getItem('verba_editor_outline');
-    if (savedOutline !== null) setIsOutlineOpen(savedOutline === 'true');
-
+    bootstrap();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.documentId]);
 
-  // Focus mode keyboard shortcut
+  // Focus mode Esc shortcut
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && isFocusMode) setIsFocusMode(false);
@@ -165,17 +188,24 @@ export default function WorkspacePage({ params }: { params: { documentId: string
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isFocusMode]);
 
-  // ─── Autosave ─────────────────────────────────────────────────────────────
+  // ─── beforeunload warning ────────────────────────────────────────────────
 
-  /**
-   * Perform the actual network save.
-   * Uses the version currently in versionRef for stale-write protection.
-   * Safe to call while another save is completing — latest JSON always wins.
-   */
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (saveStatusRef.current === 'unsaved' || saveStatusRef.current === 'failed') {
+        e.preventDefault();
+        // Modern browsers show their own message; setting returnValue triggers the dialog
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, []);
+
+  // ─── Core Save ────────────────────────────────────────────────────────────
+
   const performSave = useCallback(async (json: Record<string, unknown>) => {
     if (savingRef.current) {
-      // A save is already in-flight. Store the latest JSON and let the
-      // completion handler re-trigger a save if needed.
       pendingJsonRef.current = json;
       return;
     }
@@ -190,11 +220,7 @@ export default function WorkspacePage({ params }: { params: { documentId: string
       const res = await fetch(`/api/documents/${params.documentId}/save`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          editorState: json,
-          wordCount,
-          expectedVersion,
-        }),
+        body: JSON.stringify({ editorState: json, wordCount, expectedVersion }),
       });
 
       const data = await res.json();
@@ -204,8 +230,6 @@ export default function WorkspacePage({ params }: { params: { documentId: string
         setLiveWordCount(wordCount);
         setSaveStatus('saved');
       } else if (res.status === 409 && data.stale) {
-        // Our save was stale — a newer one already succeeded.
-        // Update our version baseline and do not show an error.
         versionRef.current = data.currentVersion;
         setSaveStatus('saved');
       } else {
@@ -217,42 +241,71 @@ export default function WorkspacePage({ params }: { params: { documentId: string
       setSaveStatus('failed');
     } finally {
       savingRef.current = false;
-
-      // If newer content arrived while we were saving, save that too
       if (pendingJsonRef.current) {
         const nextJson = pendingJsonRef.current;
         pendingJsonRef.current = null;
-        // Small delay to avoid tight retry loops on failure
         setTimeout(() => performSave(nextJson), 200);
       }
     }
   }, [params.documentId]);
 
-  /**
-   * Called by DocumentEditor on every document change.
-   * Debounces at 1000ms and marks document dirty immediately.
-   */
-  const handleEditorUpdate = useCallback((json: Record<string, unknown>) => {
-    // Mark dirty immediately so UI is truthful
-    setSaveStatus('unsaved');
+  // ─── Manual save (button + Ctrl/Cmd+S) ───────────────────────────────────
 
-    // Clear any pending autosave timer
+  const triggerManualSave = useCallback(() => {
+    if (!editorRef.current) return;
+    // Cancel any pending debounce timer before saving immediately
     if (autosaveTimerRef.current) {
       clearTimeout(autosaveTimerRef.current);
+      autosaveTimerRef.current = null;
     }
-
-    // Schedule debounced save
-    autosaveTimerRef.current = setTimeout(() => {
-      performSave(json);
-    }, 1000);
+    performSave(editorRef.current.getJSON());
   }, [performSave]);
 
-  // Flush pending save before navigating away (best-effort)
+  // Keyboard shortcut: Ctrl/Cmd+S
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const isSave = (e.ctrlKey || e.metaKey) && e.key === 's';
+      if (!isSave) return;
+      e.preventDefault(); // prevent browser Save Page dialog
+
+      // Works in both autosave ON and OFF modes
+      triggerManualSave();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [triggerManualSave]);
+
+  // ─── Editor onUpdate callback ─────────────────────────────────────────────
+
+  const handleEditorUpdate = useCallback((json: Record<string, unknown>) => {
+    // Mark dirty immediately
+    setSaveStatus('unsaved');
+
+    // Do not schedule autosave until preference is loaded or if it's off
+    if (autosaveEnabledRef.current !== true) return;
+
+    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    autosaveTimerRef.current = setTimeout(() => performSave(json), 1000);
+  }, [performSave]);
+
+  // ─── Autosave preference changes ─────────────────────────────────────────
+
+  // When autosave is switched ON and there are unsaved changes → save now
+  useEffect(() => {
+    if (autosaveEnabled === true && saveStatusRef.current === 'unsaved' && editorRef.current) {
+      performSave(editorRef.current.getJSON());
+    }
+    // When switched OFF → cancel pending debounce (in-flight saves complete normally)
+    if (autosaveEnabled === false && autosaveTimerRef.current) {
+      clearTimeout(autosaveTimerRef.current);
+      autosaveTimerRef.current = null;
+    }
+  }, [autosaveEnabled, performSave]);
+
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (autosaveTimerRef.current) {
-        clearTimeout(autosaveTimerRef.current);
-      }
+      if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
     };
   }, []);
 
@@ -311,7 +364,6 @@ export default function WorkspacePage({ params }: { params: { documentId: string
   ) => {
     if (!editorRef.current) return;
     const editor = editorRef.current;
-
     const issue = issues.find(i => i.id === issueId);
     if (!issue) return;
 
@@ -336,16 +388,16 @@ export default function WorkspacePage({ params }: { params: { documentId: string
           alert('This passage has changed since it was analyzed. The suggestion cannot be applied safely.');
           return;
         }
-        const from = blockStartPos + issue.start_offset;
-        const to = blockStartPos + issue.end_offset;
-        editor.commands.insertContentAt({ from, to }, textToApply);
+        editor.commands.insertContentAt(
+          { from: blockStartPos + issue.start_offset, to: blockStartPos + issue.end_offset },
+          textToApply
+        );
       } else {
         alert('The original paragraph was deleted or modified. The suggestion cannot be applied safely.');
         return;
       }
     }
 
-    // Optimistic UI update
     setIssues(prev =>
       prev.map(iss => {
         if (iss.id !== issueId) return iss;
@@ -381,7 +433,8 @@ export default function WorkspacePage({ params }: { params: { documentId: string
 
   // ─── Render ───────────────────────────────────────────────────────────────
 
-  if (loading) {
+  // Still loading document OR still loading preference — show spinner
+  if (loading || autosaveEnabled === null) {
     return (
       <div className="flex h-full items-center justify-center bg-[#F6F8FB]">
         <Loader2 className="w-8 h-8 text-accent animate-spin" />
@@ -398,7 +451,6 @@ export default function WorkspacePage({ params }: { params: { documentId: string
   }
 
   const activeIssue = issues.find(i => i.id === activeIssueId) || null;
-
   let activeBlockText = '';
   if (editorRef.current && activeIssue) {
     editorRef.current.state.doc.descendants(node => {
@@ -412,17 +464,12 @@ export default function WorkspacePage({ params }: { params: { documentId: string
   const isAnalyzed = issues.length > 0 || doc.status === 'analyzed' || doc.status === 'ready';
   const zoomOptions = [75, 90, 100, 110, 125, 150];
 
-  // Determine initial content:
-  // CASE A — editor_state exists → pass as Tiptap JSON
-  // CASE B — editor_state is null → pass parsed_content blocks
   const initialEditorJson = doc.editor_state ?? null;
   const initialBlocks = doc.parsed_content.sections?.[0]?.blocks || [];
-
-  // For the document outline, use whichever content is active
-  // (simplified: pull headings from initialBlocks for outline panel)
   const outlineHeadings = initialBlocks.filter(b => b.type === 'heading');
+  const displayWordCount = liveWordCount !== null ? liveWordCount : doc.word_count;
 
-  // Status badge
+  // ── Save badge ────────────────────────────────────────────────────────────
   const renderSaveBadge = () => {
     switch (saveStatus) {
       case 'saving':
@@ -448,35 +495,17 @@ export default function WorkspacePage({ params }: { params: { documentId: string
         );
       case 'failed':
         return (
-          <div className="flex items-center text-[12px] text-[#B42318] gap-1.5 px-2 py-0.5 bg-[#FEF3F2] rounded-full cursor-pointer"
+          <button
+            onClick={triggerManualSave}
+            className="flex items-center text-[12px] text-[#B42318] gap-1.5 px-2 py-0.5 bg-[#FEF3F2] rounded-full cursor-pointer hover:bg-[#FEE4E2] transition-colors"
             title="Click to retry save"
-            onClick={() => {
-              if (editorRef.current) performSave(editorRef.current.getJSON());
-            }}
           >
             <CloudOff size={13} />
-            <span>Save failed — click to retry</span>
-          </div>
+            <span>Save failed — retry</span>
+          </button>
         );
     }
   };
-
-  const renderDocStatus = (status: string) => {
-    switch (status) {
-      case 'processing':
-      case 'analyzing':
-        return <Loader2 size={14} className="text-accent animate-spin" />;
-      case 'ready':
-      case 'analyzed':
-        return <CheckCircle size={14} className="text-status-success" />;
-      case 'failed':
-        return <AlertCircle size={14} className="text-status-error" />;
-      default:
-        return <FileText size={14} className="text-foreground-secondary" />;
-    }
-  };
-
-  const displayWordCount = liveWordCount !== null ? liveWordCount : doc.word_count;
 
   return (
     <div className="flex h-full bg-[#F6F8FB] overflow-hidden relative">
@@ -515,26 +544,16 @@ export default function WorkspacePage({ params }: { params: { documentId: string
       {/* 3. Center Panel: Document Canvas */}
       <div className="flex-1 flex flex-col min-w-0 bg-[#F6F8FB] relative">
         <header className="h-[48px] bg-[#F6F8FB] border-b border-border-light flex items-center justify-between px-4 shrink-0 z-10">
-          <div className="flex items-center space-x-3 min-w-0 flex-1">
+          <div className="flex items-center space-x-2 min-w-0 flex-1 overflow-hidden">
             {!isOutlineOpen && !isFocusMode && (
-              <button onClick={() => setIsOutlineOpen(true)} className="text-foreground-muted hover:text-foreground p-1 mr-1">
+              <button onClick={() => setIsOutlineOpen(true)} className="text-foreground-muted hover:text-foreground p-1 shrink-0">
                 <PanelRightOpen size={16} className="rotate-180" />
               </button>
             )}
             <FileText size={18} className="text-accent shrink-0" />
-            <h1 className="text-[14px] font-medium text-[#0B1628] truncate">
+            <h1 className="text-[14px] font-medium text-[#0B1628] truncate min-w-0">
               {doc.original_filename || `${doc.title}.docx`}
             </h1>
-
-            {/* Document parse status badge */}
-            <div className="flex items-center text-[12px] text-foreground-secondary gap-1.5 px-2 py-0.5 bg-black/5 rounded-full">
-              {renderDocStatus(doc.status)}
-              <span className="capitalize">
-                {doc.status === 'ready' ? 'Parsed' : doc.status}
-              </span>
-            </div>
-
-            {/* Autosave status badge */}
             {renderSaveBadge()}
           </div>
 
@@ -542,6 +561,27 @@ export default function WorkspacePage({ params }: { params: { documentId: string
             <span className="text-[12px] text-foreground-secondary shrink-0 border-r border-border-light pr-3 mr-1">
               {(displayWordCount ?? 0).toLocaleString()} words
             </span>
+
+            {/* Manual Save button — only shown when autosave is OFF */}
+            {!autosaveEnabled && (
+              <button
+                id="manual-save-btn"
+                onClick={triggerManualSave}
+                disabled={saveStatus === 'saving' || saveStatus === 'saved'}
+                className={`h-[28px] px-3 inline-flex items-center gap-1.5 font-medium rounded text-[12px] transition-colors ${
+                  saveStatus === 'unsaved' || saveStatus === 'failed'
+                    ? 'bg-accent text-white hover:bg-accent-hover'
+                    : 'bg-black/5 text-foreground-secondary cursor-default'
+                } disabled:opacity-50`}
+                title="Save document (Ctrl/Cmd+S)"
+              >
+                {saveStatus === 'saving'
+                  ? <Loader2 size={13} className="animate-spin" />
+                  : <Save size={13} />
+                }
+                {saveStatus === 'saving' ? 'Saving…' : 'Save'}
+              </button>
+            )}
 
             {/* Zoom Control */}
             <div className="relative">
@@ -583,7 +623,7 @@ export default function WorkspacePage({ params }: { params: { documentId: string
             </button>
 
             {!isFocusMode && !isAssistantOpen && (
-              <button onClick={() => setIsAssistantOpen(true)} className="text-foreground-muted hover:text-foreground p-1 ml-1">
+              <button onClick={() => setIsAssistantOpen(true)} className="text-foreground-muted hover:text-foreground p-1">
                 <PanelRightOpen size={16} />
               </button>
             )}
@@ -591,7 +631,7 @@ export default function WorkspacePage({ params }: { params: { documentId: string
             <button
               onClick={handleAnalyze}
               disabled={analyzing}
-              className="ml-2 h-[28px] px-3 inline-flex items-center justify-center bg-accent text-white font-medium rounded hover:bg-accent-hover transition-colors text-[12px] disabled:opacity-50"
+              className="ml-1 h-[28px] px-3 inline-flex items-center justify-center bg-accent text-white font-medium rounded hover:bg-accent-hover transition-colors text-[12px] disabled:opacity-50"
             >
               {analyzing
                 ? <Loader2 size={14} className="animate-spin mr-1.5" />
