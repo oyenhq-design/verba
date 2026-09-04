@@ -1,7 +1,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { signup } from '../actions';
-import { AuthShell, AuthAlert, AuthButton, inputClass, inputBorderStyle } from '@/components/auth/AuthShell';
+import { AuthShell, AuthAlert, AuthButton, AuthInput } from '@/components/auth/AuthShell';
 
 export const metadata = {
   title: 'Create account — Verba',
@@ -16,15 +16,15 @@ export default function SignupPage({
   return (
     <AuthShell>
       {/* Heading */}
-      <div className="mb-7 text-center">
+      <div className="mb-8 text-center">
         <h1
           className="font-bold tracking-tight"
           style={{ fontSize: '38px', color: '#101828', lineHeight: 1.15 }}
         >
           Create your account
         </h1>
-        <p className="mt-2 text-[15px]" style={{ color: '#667085' }}>
-          Start writing with more clarity and confidence.
+        <p className="mt-2 text-[15.5px]" style={{ color: '#667085' }}>
+          Start your Verba workspace.
         </p>
       </div>
 
@@ -43,15 +43,14 @@ export default function SignupPage({
             <label htmlFor="email" className="sr-only">
               Email address
             </label>
-            <input
+            <AuthInput
               id="email"
               name="email"
               type="email"
+              icon="email"
               autoComplete="email"
               required
               placeholder="Email address"
-              className={inputClass}
-              style={inputBorderStyle}
             />
           </div>
 
@@ -59,30 +58,29 @@ export default function SignupPage({
             <label htmlFor="password" className="sr-only">
               Password
             </label>
-            <input
+            <AuthInput
               id="password"
               name="password"
               type="password"
+              icon="password"
               autoComplete="new-password"
               required
               placeholder="Password"
-              className={inputClass}
-              style={inputBorderStyle}
             />
           </div>
 
-          <div className="pt-1">
+          <div className="pt-2">
             <AuthButton label="Create account" />
           </div>
         </form>
       )}
 
       {/* Switch to login */}
-      <p className="mt-6 text-center text-[14px]" style={{ color: '#667085' }}>
+      <p className="mt-8 text-center text-[14.5px]" style={{ color: '#667085' }}>
         Already have an account?{' '}
         <Link
           href="/login"
-          className="font-semibold transition-colors"
+          className="font-semibold transition-colors hover:text-accent-hover"
           style={{ color: '#1677FF' }}
         >
           Sign in
