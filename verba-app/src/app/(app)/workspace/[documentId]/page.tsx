@@ -424,6 +424,21 @@ export default function WorkspacePage({ params }: { params: { documentId: string
       .from('writing_issues')
       .update({ status: action === 'rejected' ? 'rejected' : 'resolved' })
       .eq('id', issueId);
+      
+    // Log provenance event (fire and forget)
+    if (action === 'accepted' || action === 'rejected') {
+      fetch(`/api/documents/${params.documentId}/events`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          event_type: action === 'accepted' ? 'verba_suggestion_accepted' : 'verba_suggestion_rejected',
+          metadata: {
+            suggestion_id: suggestionId,
+            issue_id: issueId
+          }
+        })
+      }).catch(err => console.error('Failed to log suggestion event:', err));
+    }
   };
 
   const selectIssue = (id: string | null) => {

@@ -51,6 +51,25 @@ export async function POST(request: Request) {
       throw new Error(`Failed to download file from storage: ${downloadError?.message}`);
     }
 
+    // 4b. Log document_uploaded provenance event
+    // Try to get file size directly from storage metadata, or fallback to Blob size
+    const fileSizeBytes = fileData.size || 0;
+    const { error: eventError } = await supabase
+      .from('document_events')
+      .insert({
+        document_id: documentId,
+        user_id: user.id,
+        event_type: 'document_uploaded',
+        metadata: {
+          file_type: 'docx',
+          file_size_bytes: fileSizeBytes
+        }
+      });
+      
+    if (eventError) {
+      console.error('[process] Non-critical failure logging document_uploaded:', eventError.message);
+    }
+
     // 5. Send to Python FastAPI Engine
     const formData = new FormData();
     formData.append('file', fileData, 'document.docx');

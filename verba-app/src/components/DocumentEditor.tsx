@@ -102,6 +102,32 @@ export function DocumentEditor({
       attributes: {
         class: 'prose prose-slate max-w-none focus:outline-none min-h-[1000px]',
       },
+      handlePaste: (view, event, slice) => {
+        const text = slice.content.textBetween(0, slice.content.size, '\n', '\n');
+        if (text) {
+          const charCount = text.length;
+          const wordCount = text.trim().split(/\s+/).filter(w => w.length > 0).length;
+          
+          if (charCount > 0) {
+            // Extract documentId from URL since it's not a direct prop
+            const docIdMatch = window.location.pathname.match(/\/workspace\/([^/]+)/);
+            if (docIdMatch && docIdMatch[1]) {
+              fetch(`/api/documents/${docIdMatch[1]}/events`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  event_type: 'paste_inserted',
+                  metadata: {
+                    character_count: charCount,
+                    word_count: wordCount
+                  }
+                })
+              }).catch(err => console.error('Failed to log paste_inserted event:', err));
+            }
+          }
+        }
+        return false; // Let Tiptap handle the actual paste
+      },
     },
     // onUpdate fires after every document change — used for autosave debouncing upstream
     onUpdate: ({ editor: e }) => {

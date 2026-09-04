@@ -103,7 +103,7 @@ export async function POST(
           .single();
 
         if (!latestVersion || latestVersion.content_hash !== contentHash) {
-          const { error: versionError } = await supabase
+          const { data: insertedVersion, error: versionError } = await supabase
             .from('document_versions')
             .insert({
               document_id: params.id,
@@ -113,21 +113,38 @@ export async function POST(
               editor_state: editorState,
               content_hash: contentHash,
               word_count: typeof wordCount === 'number' ? wordCount : 0
-            });
+            })
+            .select('id, version_number')
+            .single();
             
           if (versionError) {
             console.error('[save] Failed to create document version checkpoint:', versionError.message);
-          }
-          
-          if (saveType === 'manual_save' && !versionError) {
-             const { error: eventError } = await supabase
-               .from('document_events')
-               .insert({
-                 document_id: params.id,
-                 user_id: user.id,
-                 event_type: 'manual_save'
-               });
-             if (eventError) console.error('[save] Failed to log manual_save event:', eventError.message);
+          } else if (insertedVersion) {
+            // Checkpoint successfully created
+            if (saveType === 'manual_save') {
+               const { error: eventError } = await supabase
+                 .from('document_events')
+                 .insert({
+                   document_id: params.id,
+                   user_id: user.id,
+                   event_type: 'manual_save',
+                   metadata: {}
+                 });
+               if (eventError) console.error('[save] Failed to log manual_save event:', eventError.message);
+            } else if (saveType === 'autosave') {
+               const { error: eventError } = await supabase
+                 .from('document_events')
+                 .insert({
+                   document_id: params.id,
+                   user_id: user.id,
+                   event_type: 'autosave_checkpoint',
+                   metadata: {
+                     checkpoint_version_id: insertedVersion.id,
+                     checkpoint_version_number: insertedVersion.version_number
+                   }
+                 });
+               if (eventError) console.error('[save] Failed to log autosave_checkpoint event:', eventError.message);
+            }
           }
         }
       } catch (err) {

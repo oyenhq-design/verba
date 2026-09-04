@@ -4,6 +4,16 @@ import fs from 'fs';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://poaclxtaacguolfeefcd.supabase.co';
 
+function canonicalStringify(obj) {
+  if (obj === null) return 'null';
+  if (Array.isArray(obj)) return '[' + obj.map(canonicalStringify).join(',') + ']';
+  if (typeof obj === 'object') {
+    const keys = Object.keys(obj).sort();
+    return '{' + keys.map(k => JSON.stringify(k) + ':' + canonicalStringify(obj[k])).join(',') + '}';
+  }
+  return JSON.stringify(obj);
+}
+
 async function run() {
   const envFile = fs.readFileSync('.env.local', 'utf-8');
   const anonKeyMatch = envFile.match(/NEXT_PUBLIC_SUPABASE_ANON_KEY=(.*)/);
@@ -139,17 +149,22 @@ async function run() {
     console.log(`events added: ${eventsCountCU - eventsCountBefore}\n`);
 
     // 4. RESTORE BASIC (Valid Restore)
+    // Capture historical row before restore
+    const { data: histBefore } = await supabaseA.from('document_versions').select('*').eq('id', version1.id).single();
+
     let reqRestore = await restoreDoc(cookieA, docIdA, version1.id, docBefore.editor_version);
     await reqRestore.json();
     
     const { data: docAfterRestore } = await supabaseA.from('documents').select('*').eq('id', docIdA).single();
-    const currentHash = crypto.createHash('sha256').update(JSON.stringify(docBefore.editor_state)).digest('hex'); // approx, just for test report
-    const restoredHash = crypto.createHash('sha256').update(JSON.stringify(docAfterRestore.editor_state)).digest('hex');
+    const currentHash = crypto.createHash('sha256').update(canonicalStringify(docBefore.editor_state)).digest('hex'); 
+    const restoredHash = crypto.createHash('sha256').update(canonicalStringify(docAfterRestore.editor_state)).digest('hex');
 
     console.log(`BEFORE`);
     console.log(`editor_version: ${docBefore.editor_version}`);
     console.log(`word_count: ${docBefore.word_count}`);
     console.log(`current content: ${docBefore.editor_state.content[0].text}`);
+    console.log(`editor_state JSON: ${JSON.stringify(docBefore.editor_state)}`);
+    console.log(`canonical stringified: ${canonicalStringify(docBefore.editor_state)}`);
     console.log(`hash: ${currentHash}\n`);
 
     // SAFETY CHECKPOINT
@@ -162,7 +177,9 @@ async function run() {
     console.log(`source: ${safetyCheckpoint.source}`);
     console.log(`content_hash: ${safetyCheckpoint.content_hash}`);
     console.log(`word_count: ${safetyCheckpoint.word_count}`);
-    console.log(`content: ${safetyCheckpoint.editor_state.content[0].text}\n`);
+    console.log(`content: ${safetyCheckpoint.editor_state.content[0].text}`);
+    console.log(`editor_state JSON: ${JSON.stringify(safetyCheckpoint.editor_state)}`);
+    console.log(`canonical stringified: ${canonicalStringify(safetyCheckpoint.editor_state)}\n`);
 
     console.log(`AFTER RESTORE`);
     console.log(`editor_version: ${docAfterRestore.editor_version}`);
@@ -180,6 +197,23 @@ async function run() {
     console.log(`restored_version_number: ${restoreEvent.metadata.restored_version_number}`);
     console.log(`previous_editor_version: ${restoreEvent.metadata.previous_editor_version}`);
     console.log(`new_editor_version: ${restoreEvent.metadata.new_editor_version}\n`);
+
+    console.log(`ORIGINAL IMMUTABILITY`);
+    console.log(`parsed_content: ${JSON.stringify(docBefore.parsed_content)} -> ${JSON.stringify(docAfterRestore.parsed_content)}`);
+    console.log(`original_filename: ${docBefore.original_filename} -> ${docAfterRestore.original_filename}`);
+    console.log(`storage_path: ${docBefore.storage_path} -> ${docAfterRestore.storage_path}`);
+    console.log(`user_id: ${docBefore.user_id} -> ${docAfterRestore.user_id}`);
+    console.log(`created_at: ${docBefore.created_at} -> ${docAfterRestore.created_at}\n`);
+
+    const { data: histAfter } = await supabaseA.from('document_versions').select('*').eq('id', version1.id).single();
+    console.log(`HISTORICAL IMMUTABILITY (Restored Row)`);
+    console.log(`id: ${histBefore.id} -> ${histAfter.id}`);
+    console.log(`version_number: ${histBefore.version_number} -> ${histAfter.version_number}`);
+    console.log(`source: ${histBefore.source} -> ${histAfter.source}`);
+    console.log(`editor_state: ${JSON.stringify(histBefore.editor_state)} -> ${JSON.stringify(histAfter.editor_state)}`);
+    console.log(`content_hash: ${histBefore.content_hash} -> ${histAfter.content_hash}`);
+    console.log(`word_count: ${histBefore.word_count} -> ${histAfter.word_count}`);
+    console.log(`created_at: ${histBefore.created_at} -> ${histAfter.created_at}\n`);
 
     // BASIC SANITY CHECKS
     if (docAfterRestore.editor_version !== docBefore.editor_version + 1) {
