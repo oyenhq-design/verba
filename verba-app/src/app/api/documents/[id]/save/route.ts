@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createHash } from 'crypto';
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function canonicalStringify(obj: any): string {
   if (Array.isArray(obj)) return `[${obj.map(canonicalStringify).join(',')}]`;
   if (typeof obj === 'object' && obj !== null) {
