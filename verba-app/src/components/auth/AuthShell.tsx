@@ -315,10 +315,7 @@ export function AuthButton({ label }: { label: string }) {
   return (
     <button
       type="submit"
-      className="relative flex w-full items-center justify-center gap-2 rounded-[9px] text-[15px] font-semibold text-white transition-colors h-[50px]"
-      style={{ background: '#1677FF' }}
-      onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#0958D9'; }}
-      onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = '#1677FF'; }}
+      className="relative flex w-full items-center justify-center gap-2 rounded-[9px] text-[15px] font-semibold text-white transition-colors h-[50px] bg-accent hover:bg-accent-hover"
     >
       {label}
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
