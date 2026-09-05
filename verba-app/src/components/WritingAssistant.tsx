@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Check, X, RefreshCw, Edit2, Loader2, ShieldCheck, Zap, Play } from 'lucide-react';
+import { Check, X, RefreshCw, Edit2, Loader2, ShieldCheck, Zap } from 'lucide-react';
 
 interface Suggestion {
   id: string;
@@ -10,7 +10,7 @@ interface Suggestion {
   status: string;
 }
 
-interface Issue {
+export interface Issue {
   id: string;
   issue_type: string;
   original_text: string;
@@ -33,28 +33,22 @@ interface Props {
   analyzeError?: string | null;
 }
 
-export function WritingAssistant({ documentId, blockId, paragraphText, issue, onClose, onSuggestionAction, isAnalyzed, isAnalyzing, onAnalyze, issuesCount = 0, docStatus = '', analyzeError = null }: Props) {
+export function WritingAssistant({ documentId, blockId, paragraphText, issue, onClose, onSuggestionAction, isAnalyzed, issuesCount = 0, docStatus = '', analyzeError = null }: Props) {
   const [loadingAlternative, setLoadingAlternative] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState('');
 
-  // Analysis engine error takes top priority — show before any other state
+  // Analysis engine error takes top priority
   if (analyzeError) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-center p-8 bg-white">
-        <Zap className="w-10 h-10 mb-4 text-status-error" />
-        <h3 className="text-[15px] font-semibold text-[#0B1628] mb-2">Analysis failed</h3>
-        <p className="text-[14px] text-foreground-secondary mb-6 leading-relaxed">
+        <div className="w-12 h-12 rounded-full bg-[#FEF3F2] flex items-center justify-center mb-4 text-[#B42318]">
+          <Zap size={24} />
+        </div>
+        <h3 className="text-[14px] font-semibold text-[#0B1628] mb-2">Analysis failed</h3>
+        <p className="text-[14px] text-foreground-secondary mb-6 leading-relaxed max-w-[240px]">
           {analyzeError}
         </p>
-        <button
-          onClick={onAnalyze}
-          disabled={isAnalyzing}
-          className="w-full h-[36px] flex items-center justify-center bg-accent text-white font-medium rounded-md hover:bg-accent-hover transition-colors text-[13px] disabled:opacity-50"
-        >
-          {isAnalyzing ? <Loader2 size={14} className="animate-spin mr-2" /> : <Play size={14} className="mr-2 fill-current" />}
-          Try Again
-        </button>
       </div>
     );
   }
@@ -62,19 +56,13 @@ export function WritingAssistant({ documentId, blockId, paragraphText, issue, on
   if (docStatus === 'failed') {
     return (
       <div className="flex flex-col items-center justify-center h-full text-center p-8 bg-white">
-        <Zap className="w-10 h-10 mb-4 text-status-error" />
-        <h3 className="text-[15px] font-semibold text-[#0B1628] mb-2">Analysis failed</h3>
-        <p className="text-[14px] text-foreground-secondary mb-6 leading-relaxed">
-          Analysis failed. Try again.
+        <div className="w-12 h-12 rounded-full bg-[#FEF3F2] flex items-center justify-center mb-4 text-[#B42318]">
+          <Zap size={24} />
+        </div>
+        <h3 className="text-[14px] font-semibold text-[#0B1628] mb-2">Analysis failed</h3>
+        <p className="text-[14px] text-foreground-secondary mb-6 leading-relaxed max-w-[240px]">
+          Analysis failed. Head over to the Review tab to try again.
         </p>
-        <button 
-          onClick={onAnalyze} 
-          disabled={isAnalyzing}
-          className="w-full h-[36px] flex items-center justify-center bg-accent text-white font-medium rounded-md hover:bg-accent-hover transition-colors text-[13px] disabled:opacity-50"
-        >
-          {isAnalyzing ? <Loader2 size={14} className="animate-spin mr-2" /> : <Play size={14} className="mr-2 fill-current" />}
-          Try Again
-        </button>
       </div>
     );
   }
@@ -84,17 +72,9 @@ export function WritingAssistant({ documentId, blockId, paragraphText, issue, on
       <div className="flex flex-col items-center justify-center h-full text-center p-8 bg-white">
         <Zap className="w-10 h-10 mb-4 text-accent/40" />
         <h3 className="text-[15px] font-semibold text-[#0B1628] mb-2">Writing Assistant</h3>
-        <p className="text-[14px] text-foreground-secondary mb-6 leading-relaxed">
-          Analyze this document to identify writing issues.
+        <p className="text-[14px] text-foreground-secondary mb-6 leading-relaxed max-w-[240px]">
+          Head over to the Review tab to analyze this document.
         </p>
-        <button 
-          onClick={onAnalyze} 
-          disabled={isAnalyzing}
-          className="w-full h-[36px] flex items-center justify-center bg-accent text-white font-medium rounded-md hover:bg-accent-hover transition-colors text-[13px] disabled:opacity-50"
-        >
-          {isAnalyzing ? <Loader2 size={14} className="animate-spin mr-2" /> : <Play size={14} className="mr-2 fill-current" />}
-          Analyze Document
-        </button>
       </div>
     );
   }
@@ -104,7 +84,7 @@ export function WritingAssistant({ documentId, blockId, paragraphText, issue, on
       <div className="flex flex-col items-center justify-center h-full text-center p-8 bg-white">
         <Check className="w-10 h-10 mb-4 text-status-success" />
         <h3 className="text-[15px] font-semibold text-[#0B1628] mb-2">Analysis complete</h3>
-        <p className="text-[14px] text-foreground-secondary leading-relaxed">
+        <p className="text-[14px] text-foreground-secondary leading-relaxed max-w-[240px]">
           No writing issues were found.
         </p>
       </div>

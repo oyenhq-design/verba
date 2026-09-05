@@ -3,11 +3,11 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import {
-  Loader2, FileText, CheckCircle, Play,
+  Loader2, FileText, CheckCircle,
   Maximize, Minimize, List as ListIcon,
-  PanelRightClose, PanelRightOpen, ChevronDown, CloudOff, Cloud, Save,
+  PanelRightClose, PanelRightOpen, ChevronDown, CloudOff, Cloud, Save, Sparkles
 } from 'lucide-react';
-import { WritingAssistant } from '@/components/WritingAssistant';
+import { VerbaWorkspace } from '@/components/workspace/VerbaWorkspace';
 import { DocumentEditor } from '@/components/DocumentEditor';
 import { Editor } from '@tiptap/react';
 
@@ -97,8 +97,8 @@ export default function WorkspacePage({ params }: { params: { documentId: string
 
   // Workspace Layout State
   const [isFocusMode, setIsFocusMode] = useState(false);
-  const [isOutlineOpen, setIsOutlineOpen] = useState(true);
-  const [isAssistantOpen, setIsAssistantOpen] = useState(false);
+  const [isOutlineOpen, setIsOutlineOpen] = useState(false);
+  const [isWorkspaceOpen, setIsWorkspaceOpen] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(100);
   const [showZoomMenu, setShowZoomMenu] = useState(false);
 
@@ -136,7 +136,7 @@ export default function WorkspacePage({ params }: { params: { documentId: string
 
       if (!issuesError && issuesData) {
         setIssues(issuesData);
-        if (issuesData.length > 0) setIsAssistantOpen(true);
+        if (issuesData.length > 0) setIsWorkspaceOpen(true);
       }
     } catch (err: unknown) {
       console.error('[loadData]', err);
@@ -338,17 +338,17 @@ export default function WorkspacePage({ params }: { params: { documentId: string
 
       if (res.ok && resData.success) {
         await loadData();
-        setIsAssistantOpen(true);
+        setIsWorkspaceOpen(true);
       } else {
         const failMsg = resData.message || 'Analysis failed. Please try again.';
         console.error('[handleAnalyze] Engine error:', resData.error, failMsg);
         setAnalyzeError(failMsg);
-        setIsAssistantOpen(true);
+        setIsWorkspaceOpen(true);
       }
     } catch (e) {
       console.error('[handleAnalyze] Network error:', e);
       setAnalyzeError('Could not reach the analysis service. Please check your connection.');
-      setIsAssistantOpen(true);
+      setIsWorkspaceOpen(true);
     } finally {
       setAnalyzing(false);
     }
@@ -443,7 +443,7 @@ export default function WorkspacePage({ params }: { params: { documentId: string
 
   const selectIssue = (id: string | null) => {
     setActiveIssueId(id);
-    if (id) setIsAssistantOpen(true);
+    if (id) setIsWorkspaceOpen(true);
   };
 
   // ─── Render ───────────────────────────────────────────────────────────────
@@ -572,8 +572,8 @@ export default function WorkspacePage({ params }: { params: { documentId: string
             {renderSaveBadge()}
           </div>
 
-          <div className="flex items-center shrink-0 space-x-2">
-            <span className="text-[12px] text-foreground-secondary shrink-0 border-r border-border-light pr-3 mr-1">
+          <div className="flex items-center shrink-0 space-x-3">
+            <span className="text-[12px] text-foreground-secondary shrink-0 border-r border-border-light pr-3">
               {(displayWordCount ?? 0).toLocaleString()} words
             </span>
 
@@ -637,22 +637,19 @@ export default function WorkspacePage({ params }: { params: { documentId: string
               {isFocusMode ? <Minimize size={16} /> : <Maximize size={16} />}
             </button>
 
-            {!isFocusMode && !isAssistantOpen && (
-              <button onClick={() => setIsAssistantOpen(true)} className="text-foreground-muted hover:text-foreground p-1">
-                <PanelRightOpen size={16} />
-              </button>
-            )}
+            <div className="w-[1px] h-4 bg-border-light mx-1" />
 
             <button
-              onClick={handleAnalyze}
-              disabled={analyzing}
-              className="ml-1 h-[28px] px-3 inline-flex items-center justify-center bg-accent text-white font-medium rounded hover:bg-accent-hover transition-colors text-[12px] disabled:opacity-50"
+              onClick={() => setIsWorkspaceOpen(!isWorkspaceOpen)}
+              className={`flex items-center space-x-1.5 px-3 h-[28px] text-[12px] font-medium border rounded transition-colors ${
+                isWorkspaceOpen 
+                  ? 'bg-accent/10 border-accent/20 text-accent' 
+                  : 'bg-white border-border-light text-[#0B1628] hover:bg-background-secondary'
+              }`}
             >
-              {analyzing
-                ? <Loader2 size={14} className="animate-spin mr-1.5" />
-                : <Play size={14} className="mr-1.5 fill-current" />
-              }
-              Analyze
+              <Sparkles size={14} className={isWorkspaceOpen ? 'text-accent' : 'text-accent'} />
+              <span>Verba Workspace</span>
+              <ChevronDown size={14} className={`ml-1 transition-transform ${isWorkspaceOpen ? 'rotate-180' : ''}`} />
             </button>
           </div>
         </header>
@@ -670,32 +667,23 @@ export default function WorkspacePage({ params }: { params: { documentId: string
         />
       </div>
 
-      {/* 4. Right Panel: Writing Assistant */}
-      {!isFocusMode && isAssistantOpen && (
-        <aside className="w-[320px] bg-white border-l border-border-light shrink-0 flex flex-col h-full relative z-20 shadow-[-4px_0_24px_rgba(0,0,0,0.02)] md:shadow-none">
-          <div className="absolute top-2 right-2 z-10">
-            <button
-              onClick={() => setIsAssistantOpen(false)}
-              className="p-1 text-foreground-muted hover:text-foreground hover:bg-black/5 rounded"
-            >
-              <PanelRightClose size={16} />
-            </button>
-          </div>
-          <WritingAssistant
-            documentId={params.documentId}
-            blockId={activeIssue?.block_id || ''}
-            paragraphText={activeBlockText}
-            issue={activeIssue as unknown as typeof activeIssue}
-            onClose={() => selectIssue(null)}
-            onSuggestionAction={handleSuggestionAction as unknown as (...args: unknown[]) => void}
-            isAnalyzed={isAnalyzed}
-            isAnalyzing={analyzing}
-            onAnalyze={handleAnalyze}
-            issuesCount={issues.filter(i => i.status === 'open').length}
-            docStatus={doc.status}
-            analyzeError={analyzeError}
-          />
-        </aside>
+      {/* 4. Right Panel: Verba Workspace */}
+      {!isFocusMode && isWorkspaceOpen && (
+        <VerbaWorkspace
+          documentId={params.documentId}
+          onClose={() => setIsWorkspaceOpen(false)}
+          blockId={activeIssue?.block_id || ''}
+          paragraphText={activeBlockText}
+          issue={activeIssue as unknown as typeof activeIssue}
+          onCloseIssue={() => selectIssue(null)}
+          onSuggestionAction={handleSuggestionAction as unknown as (...args: unknown[]) => void}
+          isAnalyzed={isAnalyzed}
+          isAnalyzing={analyzing}
+          onAnalyze={handleAnalyze}
+          issuesCount={issues.filter(i => i.status === 'open').length}
+          docStatus={doc.status}
+          analyzeError={analyzeError}
+        />
       )}
     </div>
   );
