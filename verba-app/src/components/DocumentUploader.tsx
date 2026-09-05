@@ -163,7 +163,7 @@ export function DocumentUploader() {
           {status === 'empty' && (
             <>
               <h2 className="text-[16px] font-bold text-[#101828] mb-1">Upload existing work</h2>
-              <p className="text-[14px] text-[#667085]">Already started? Bring your document into Verba and continue developing it here.</p>
+              <p className="text-[14px] text-[#667085] leading-relaxed">Already started? Bring your existing document into Verba and continue developing it here.</p>
             </>
           )}
 

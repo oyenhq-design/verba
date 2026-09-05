@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { DocumentUploader } from '@/components/DocumentUploader';
-import { FileText, MoreHorizontal, Search, Clock, Sparkles } from 'lucide-react';
+import { FileText, Search, Clock, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 import { NewWorkModal } from '@/components/NewWorkModal';
 
@@ -33,27 +33,29 @@ export function DashboardContent({ documents, userName }: Props) {
   return (
     <div className="p-8 max-w-[1200px] mx-auto w-full pt-10 pb-24">
       {/* Workspace Header */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between mb-10 gap-6">
-        <div>
-          <h1 className="text-[28px] font-bold text-[#101828] mb-1">{greeting}</h1>
-          <p className="text-[15px] font-medium text-[#101828] mt-2 mb-1">
-            What are you working on?
-          </p>
-          <p className="text-[15px] text-[#667085]">
-            Start wherever you are — from a rough thought to an existing draft.
-          </p>
-        </div>
-        <div className="relative w-full md:w-[280px]">
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <Search size={16} className="text-[#667085]" />
+      <div className="mb-10">
+        <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
+          <div>
+            <h1 className="text-[28px] font-bold text-[#101828] mb-2">{greeting}</h1>
+            <p className="text-[16px] font-medium text-[#101828] mb-1">
+              Start wherever you are.
+            </p>
+            <p className="text-[15px] text-[#667085]">
+              From a rough thought to an existing draft, Verba helps you develop your work.
+            </p>
           </div>
-          <input
-            type="text"
-            placeholder="Search documents..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-[#E5EAF0] rounded-[8px] text-[14px] text-[#101828] placeholder-[#94A3B8] focus:outline-none focus:ring-1 focus:ring-accent shadow-[0_1px_2px_rgba(0,0,0,0.02)]"
-          />
+          <div className="relative w-full md:w-[280px]">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <Search size={16} className="text-[#667085]" />
+            </div>
+            <input
+              type="text"
+              placeholder="Search your work..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-[#E5EAF0] rounded-[8px] text-[14px] text-[#101828] placeholder-[#94A3B8] focus:outline-none focus:ring-1 focus:ring-accent shadow-[0_1px_2px_rgba(0,0,0,0.02)]"
+            />
+          </div>
         </div>
       </div>
 
@@ -61,17 +63,19 @@ export function DashboardContent({ documents, userName }: Props) {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-10">
         
         {/* Start with an idea */}
-        <div className="bg-white border border-[#E5EAF0] rounded-[10px] p-6 shadow-[0_1px_2px_rgba(0,0,0,0.02)] flex flex-col hover:border-[#CBD5E1] transition-colors h-full">
-          <div className="w-10 h-10 rounded-[8px] bg-accent/10 flex items-center justify-center text-accent mb-4">
+        <div className="bg-accent/5 border border-accent/30 rounded-[10px] p-6 shadow-[0_1px_2px_rgba(0,0,0,0.02)] flex flex-col hover:border-accent/50 transition-colors h-full relative overflow-hidden">
+          <div className="w-10 h-10 rounded-[8px] bg-accent text-white flex items-center justify-center mb-4 shadow-sm">
             <Sparkles size={20} />
           </div>
-          <h2 className="text-[16px] font-bold text-[#101828] mb-1">Start with an idea</h2>
-          <p className="text-[14px] text-[#667085] flex-grow mb-6">
-            Have something in mind? Develop it into a clear piece of work with Verba.
+          <h2 className="text-[16px] font-bold text-[#101828] mb-1 flex items-center">
+            Start with an idea
+          </h2>
+          <p className="text-[14px] text-[#475569] flex-grow mb-6 leading-relaxed">
+            Have a rough thought, topic or question? Develop it into a clear direction and plan with Verba.
           </p>
           <button 
             onClick={() => setIsNewWorkModalOpen(true)}
-            className="w-full h-[38px] px-5 inline-flex items-center justify-center bg-white border border-[#E5EAF0] text-[#101828] font-semibold rounded-[8px] hover:bg-slate-50 transition-colors text-[14px] shadow-sm"
+            className="w-full h-[38px] px-5 inline-flex items-center justify-center bg-accent border border-transparent text-white font-semibold rounded-[8px] hover:bg-accent-hover transition-colors text-[14px] shadow-sm"
           >
             Start developing &rarr;
           </button>
@@ -83,8 +87,8 @@ export function DashboardContent({ documents, userName }: Props) {
             <FileText size={20} />
           </div>
           <h2 className="text-[16px] font-bold text-[#101828] mb-1">Start blank</h2>
-          <p className="text-[14px] text-[#667085] flex-grow mb-6">
-            Know exactly what you need to write? Open an empty document.
+          <p className="text-[14px] text-[#667085] flex-grow mb-6 leading-relaxed">
+            Know what you want to write? Open a clean document and begin.
           </p>
           <button 
             onClick={() => setIsNewWorkModalOpen(true)}
@@ -132,23 +136,17 @@ export function DashboardContent({ documents, userName }: Props) {
       <div>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-[15px] font-semibold text-[#101828]">Recent work</h2>
+          <Link href="/documents" className="text-[14px] font-medium text-accent hover:text-accent-hover transition-colors flex items-center">
+            View all &rarr;
+          </Link>
         </div>
 
         {!documents || documents.length === 0 ? (
-          <div className="bg-white border border-[#E5EAF0] rounded-[10px] flex flex-col items-center justify-center text-center shadow-[0_1px_2px_rgba(0,0,0,0.02)] h-[240px]">
-            <div className="w-12 h-12 rounded-[10px] bg-slate-50 border border-slate-100 text-slate-400 flex items-center justify-center mb-4">
-              <FileText size={24} />
-            </div>
-            <h3 className="text-[15px] font-semibold text-[#101828] mb-1">No work yet</h3>
-            <p className="text-[14px] text-[#667085] max-w-sm mt-1 mb-6">
-              Start with an idea, open a blank document, or upload existing work to get started.
+          <div className="bg-white border border-[#E5EAF0] rounded-[10px] flex flex-col items-center justify-center text-center shadow-[0_1px_2px_rgba(0,0,0,0.02)] h-[180px]">
+            <h3 className="text-[16px] font-semibold text-[#101828] mb-1">Your work will appear here.</h3>
+            <p className="text-[14px] text-[#667085] max-w-sm mt-1">
+              Projects and documents you start in Verba will be easy to continue from here.
             </p>
-            <button 
-              onClick={() => setIsNewWorkModalOpen(true)}
-              className="h-[38px] px-5 inline-flex items-center justify-center bg-accent text-white font-medium rounded-[8px] hover:bg-accent-hover transition-colors text-[13px] shadow-sm"
-            >
-              Start new work
-            </button>
           </div>
         ) : filteredDocuments.length === 0 ? (
           <div className="bg-white border border-[#E5EAF0] rounded-[10px] flex flex-col items-center justify-center text-center shadow-[0_1px_2px_rgba(0,0,0,0.02)] h-[180px]">
@@ -183,8 +181,8 @@ export function DashboardContent({ documents, userName }: Props) {
                         <td className="px-5 py-3.5">
                           <Link href={`/workspace/${doc.id}`} className="flex items-center w-fit max-w-[300px]">
                             <FileText size={18} className="text-[#94A3B8] mr-3 shrink-0" />
-                            <span className="text-[14px] font-semibold text-[#101828] hover:text-accent transition-colors truncate">
-                              {doc.title}.docx
+                            <span className="text-[14px] font-semibold text-[#101828] group-hover:text-accent transition-colors truncate">
+                              {doc.title}
                             </span>
                           </Link>
                         </td>
@@ -204,9 +202,14 @@ export function DashboardContent({ documents, userName }: Props) {
                           </span>
                         </td>
                         <td className="px-5 py-3.5 text-right">
-                          <button className="text-[#94A3B8] hover:text-[#101828] p-1.5 opacity-0 group-hover:opacity-100 transition-opacity rounded hover:bg-[#F1F5F9]">
-                            <MoreHorizontal size={18} />
-                          </button>
+                          <div className="flex items-center justify-end space-x-2">
+                            <Link 
+                              href={`/workspace/${doc.id}`}
+                              className="opacity-0 group-hover:opacity-100 transition-opacity text-[13px] font-medium text-accent hover:text-accent-hover flex items-center"
+                            >
+                              Continue &rarr;
+                            </Link>
+                          </div>
                         </td>
                       </tr>
                     );
