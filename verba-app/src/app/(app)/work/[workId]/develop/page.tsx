@@ -15,7 +15,7 @@ export default async function DevelopPage({ params }: { params: { workId: string
   // Fetch work details
   const { data: work, error: workError } = await supabase
     .from('works')
-    .select('id, user_id, title, context, initial_idea')
+    .select('id, user_id, title, context, initial_idea, stage')
     .eq('id', params.workId)
     .single();
 
@@ -42,6 +42,8 @@ export default async function DevelopPage({ params }: { params: { workId: string
       initialTitle={work.title}
       initialContext={work.context || {}}
       initialMessages={initialMessages}
+      initialIdea={work.initial_idea}
+      stage={work.stage}
     />
   );
 }
