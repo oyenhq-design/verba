@@ -9,7 +9,7 @@ export function ResearchTab() {
       </div>
       <h3 className="text-[14px] font-semibold text-[#0B1628] mb-2">Research</h3>
       <p className="text-[13px] text-foreground-secondary leading-relaxed max-w-[240px]">
-        Research tools will appear here as we build the source workflow.
+        Research tools will appear here once the Verba Research layer is connected.
       </p>
     </div>
   );

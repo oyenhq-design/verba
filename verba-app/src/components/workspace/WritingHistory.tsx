@@ -19,7 +19,10 @@ export function WritingHistory({ events, loading }: Props) {
   if (events.length === 0) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center p-8 bg-[#F9FAFB] text-center">
-        <p className="text-[13px] text-foreground-secondary">No writing history yet.</p>
+        <p className="text-[13px] text-foreground-secondary">
+          No writing history yet.<br /><br />
+          As you work on this document, meaningful activity will appear here.
+        </p>
       </div>
     );
   }

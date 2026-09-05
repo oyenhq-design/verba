@@ -12,6 +12,7 @@ interface Suggestion {
 
 export interface Issue {
   id: string;
+  status: string;
   issue_type: string;
   original_text: string;
   explanation: string;
@@ -28,12 +29,14 @@ interface Props {
   isAnalyzed: boolean;
   isAnalyzing: boolean;
   onAnalyze: () => void;
+  issues?: Issue[];
+  onIssueSelect?: (id: string | null) => void;
   issuesCount?: number;
   docStatus?: string;
   analyzeError?: string | null;
 }
 
-export function WritingAssistant({ documentId, blockId, paragraphText, issue, onClose, onSuggestionAction, isAnalyzed, issuesCount = 0, docStatus = '', analyzeError = null }: Props) {
+export function WritingAssistant({ documentId, blockId, paragraphText, issue, onClose, onSuggestionAction, isAnalyzed, issues = [], onIssueSelect, issuesCount = 0, docStatus = '', analyzeError = null }: Props) {
   const [loadingAlternative, setLoadingAlternative] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState('');
@@ -92,13 +95,51 @@ export function WritingAssistant({ documentId, blockId, paragraphText, issue, on
   }
 
   if (!issue) {
+    const openIssues = issues.filter(i => i.status === 'open' || i.status === 'pending');
+    if (openIssues.length === 0) {
+      return (
+        <div className="flex flex-col items-center justify-center h-full text-center p-8 bg-white">
+          <Check className="w-10 h-10 mb-4 text-status-success" />
+          <h3 className="text-[15px] font-semibold text-[#0B1628] mb-2">Analysis complete</h3>
+          <p className="text-[14px] text-foreground-secondary leading-relaxed max-w-[240px]">
+            No writing issues were found.
+          </p>
+        </div>
+      );
+    }
+
     return (
-      <div className="flex flex-col items-center justify-center h-full text-center p-8 bg-white">
-        <ShieldCheck className="w-10 h-10 mb-4 text-foreground-muted" />
-        <h3 className="text-[15px] font-semibold text-[#0B1628] mb-2">Analysis Complete</h3>
-        <p className="text-[14px] text-foreground-secondary leading-relaxed">
-          Select a highlighted passage to review Verba&apos;s suggestion.
-        </p>
+      <div className="flex flex-col h-full bg-white relative">
+        <div className="flex items-center justify-between p-4 border-b border-border-light bg-white sticky top-0 z-10 shrink-0">
+          <h3 className="text-[14px] font-semibold text-[#0B1628]">
+            {openIssues.length} writing {openIssues.length === 1 ? 'issue' : 'issues'}
+          </h3>
+        </div>
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {openIssues.map(i => {
+            const formatType = (type: string) => type.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+            const activeSug = i.suggestions.find(s => s.status === 'pending') || i.suggestions[i.suggestions.length - 1];
+            return (
+              <button
+                key={i.id}
+                onClick={() => onIssueSelect && onIssueSelect(i.id)}
+                className="w-full text-left p-4 bg-white border border-border-light rounded-lg shadow-sm hover:border-accent hover:shadow-md transition-all group"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[11px] font-semibold text-accent uppercase tracking-wider">{formatType(i.issue_type)}</span>
+                </div>
+                <p className="text-[14px] text-[#0B1628] font-medium leading-relaxed mb-2 line-clamp-3">
+                  &ldquo;{i.original_text}&rdquo;
+                </p>
+                {activeSug && (
+                  <p className="text-[13px] text-foreground-secondary leading-relaxed line-clamp-2">
+                    Suggestion: {activeSug.suggested_text}
+                  </p>
+                )}
+              </button>
+            );
+          })}
+        </div>
       </div>
     );
   }

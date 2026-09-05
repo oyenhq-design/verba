@@ -48,7 +48,10 @@ export function VersionHistory({ documentId, versions, loading, onRestoreSuccess
   if (versions.length === 0) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center p-8 bg-[#F9FAFB] text-center">
-        <p className="text-[13px] text-foreground-secondary">No versions available.</p>
+        <p className="text-[13px] text-foreground-secondary">
+          No saved versions yet.<br /><br />
+          Manual saves and meaningful checkpoints will appear here.
+        </p>
       </div>
     );
   }

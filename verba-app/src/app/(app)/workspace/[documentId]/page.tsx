@@ -674,7 +674,9 @@ export default function WorkspacePage({ params }: { params: { documentId: string
           onClose={() => setIsWorkspaceOpen(false)}
           blockId={activeIssue?.block_id || ''}
           paragraphText={activeBlockText}
+          issues={issues}
           issue={activeIssue as unknown as typeof activeIssue}
+          onIssueSelect={selectIssue}
           onCloseIssue={() => selectIssue(null)}
           onSuggestionAction={handleSuggestionAction as unknown as (...args: unknown[]) => void}
           isAnalyzed={isAnalyzed}

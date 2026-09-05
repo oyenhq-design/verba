@@ -13,7 +13,9 @@ interface Props {
   // Assistant Props
   blockId: string;
   paragraphText: string;
+  issues?: Issue[];
   issue: Issue | null;
+  onIssueSelect?: (id: string | null) => void;
   onSuggestionAction: (issueId: string, suggestionId: string, action: 'accepted' | 'rejected' | 'manually_edited', newText?: string) => void;
   onCloseIssue: () => void;
   // Review Props
@@ -30,7 +32,9 @@ export function VerbaWorkspace({
   onClose,
   blockId,
   paragraphText,
+  issues = [],
   issue,
+  onIssueSelect,
   onSuggestionAction,
   onCloseIssue,
   isAnalyzed,
@@ -69,7 +73,9 @@ export function VerbaWorkspace({
             documentId={documentId}
             blockId={blockId}
             paragraphText={paragraphText}
+            issues={issues}
             issue={issue}
+            onIssueSelect={onIssueSelect}
             onClose={onCloseIssue}
             onSuggestionAction={onSuggestionAction}
             isAnalyzed={isAnalyzed}

@@ -9,7 +9,7 @@ export function CiteTab() {
       </div>
       <h3 className="text-[14px] font-semibold text-[#0B1628] mb-2">Cite</h3>
       <p className="text-[13px] text-foreground-secondary leading-relaxed max-w-[240px]">
-        Citation features will appear here as we build the source workflow.
+        Your source library and citation tools will appear here once CITE is implemented.
       </p>
     </div>
   );
