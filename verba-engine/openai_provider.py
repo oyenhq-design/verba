@@ -96,3 +96,66 @@ Return JSON strictly following this schema:
         except json.JSONDecodeError as exc:
             logger.warning("JSON decode failed in generate_alternative: %s", exc)
             return {"suggested_text": issue.get("original_text", ""), "explanation": "Failed to generate alternative."}
+
+    def develop_conversation(self, initial_idea: str | None, current_context: dict, recent_messages: list, message: str) -> dict:
+        prompt = f"""You are Verba, an intelligent, calm, and curious academic writing assistant. 
+Your goal is to help the user shape their rough idea into a structured project context.
+Do not write the final document or essay for them yet. 
+Help them think. Ask one useful question at a time to clarify their intent.
+Challenge overly broad ideas gently (e.g. "That sounds impressive, but might be too broad to finish well. Let's narrow it.").
+Use the current Project Context to inform your response. Do not fabricate research findings, papers, or quotes.
+
+Current Project Context:
+{json.dumps(current_context, indent=2)}
+
+Initial Idea:
+{initial_idea or "None"}
+
+The user just said:
+{message}
+
+Respond in JSON matching exactly this schema:
+{{
+  "message": "string (your conversational reply)",
+  "suggested_replies": ["string", "string", "string"],
+  "context_updates": {{
+    // Only include fields from the Project Context that have been clarified or updated.
+    // Allowed keys: working_title, work_type, field, topic, problem, aim, objectives, scope, methodology, tools, geography, citation_style, economic_analysis, focus, constraints, context_summary
+  }},
+  "stage_suggestion": "string (developing, shaping) or null",
+  "readiness": {{
+    "can_plan": boolean,
+    "missing": ["string", "string"] // fields missing before planning can start
+  }}
+}}"""
+
+        formatted_messages = [
+            {"role": "system", "content": "You output JSON matching the requested schema exactly. You are Verba, an academic writing assistant."},
+        ]
+
+        # Add recent messages for context
+        for msg in recent_messages:
+            formatted_messages.append({"role": msg.get("role"), "content": msg.get("content")})
+
+        # Add the final prompt
+        formatted_messages.append({"role": "user", "content": prompt})
+
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=formatted_messages,
+            response_format={"type": "json_object"},
+            temperature=0.7,
+        )
+
+        raw = response.choices[0].message.content
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError as exc:
+            logger.warning("JSON decode failed in develop_conversation: %s", exc)
+            return {
+                "message": "I'm having trouble processing that right now. Could you rephrase?",
+                "suggested_replies": [],
+                "context_updates": {},
+                "stage_suggestion": None,
+                "readiness": {"can_plan": False, "missing": []}
+            }

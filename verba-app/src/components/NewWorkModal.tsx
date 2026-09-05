@@ -42,14 +42,14 @@ export function NewWorkModal({ isOpen, onClose, onUploadSelect }: Props) {
     if (!ideaText.trim()) return;
     try {
       setIsSubmitting(true);
-      const res = await fetch('/api/documents/new', {
+      const res = await fetch('/api/works', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'idea', idea: ideaText }),
+        body: JSON.stringify({ initialIdea: ideaText }),
       });
       if (res.ok) {
-        const { documentId } = await res.json();
-        router.push(`/workspace/${documentId}`);
+        const { workId } = await res.json();
+        router.push(`/work/${workId}/develop`);
       } else {
         setIsSubmitting(false);
       }

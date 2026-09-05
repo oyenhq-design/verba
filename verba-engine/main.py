@@ -59,6 +59,27 @@ class AlternativeRequest(BaseModel):
     issue: Dict[str, Any]
 
 
+class DevelopMessage(BaseModel):
+    role: str
+    content: str
+
+
+class DevelopRequest(BaseModel):
+    work_id: str
+    initial_idea: str | None = None
+    current_context: Dict[str, Any] = {}
+    recent_messages: list[DevelopMessage] = []
+    message: str
+
+
+class DevelopResponse(BaseModel):
+    message: str
+    suggested_replies: list[str] = []
+    context_updates: Dict[str, Any] = {}
+    stage_suggestion: str | None = None
+    readiness: Dict[str, Any] = {}
+
+
 @app.get("/health")
 def health_check():
     return {"status": "ok", "service": "verba-engine"}
@@ -209,6 +230,65 @@ async def analyze_alternative(req: AlternativeRequest):
             content={
                 "error": "ALTERNATIVE_GENERATION_FAILED",
                 "message": "Unable to generate alternative.",
+            },
+        )
+
+
+@app.post("/api/develop", response_model=DevelopResponse)
+async def develop_conversation_route(req: DevelopRequest):
+    """Conversational development endpoint for shaping an idea."""
+    try:
+        # Convert Pydantic messages back to dicts for the provider
+        recent_msgs_dict = [{"role": m.role, "content": m.content} for m in req.recent_messages]
+
+        result = provider.develop_conversation(
+            initial_idea=req.initial_idea,
+            current_context=req.current_context,
+            recent_messages=recent_msgs_dict,
+            message=req.message
+        )
+        
+        # We assume result is a dictionary matching the DevelopResponse schema.
+        # Pydantic will validate and coerce it automatically.
+        return result
+
+    except Exception as exc:
+        logger.error(
+            "develop_conversation_route failed: %s — %s",
+            type(exc).__name__,
+            str(exc),
+            extra={"exception_type": type(exc).__name__},
+        )
+        logger.debug("Full traceback:\n%s", traceback.format_exc())
+        
+        # Classify the error for the caller without leaking internal detail
+        exc_name = type(exc).__name__
+        exc_str = str(exc).lower()
+
+        if "authenticationerror" in exc_name or "incorrect api key" in exc_str or "401" in exc_str:
+            error_code = "OPENAI_AUTH_FAILED"
+            message = "OpenAI authentication failed."
+        elif (
+            "ratelimiterror" in exc_name
+            or "quotaexceeded" in exc_name
+            or "insufficient_quota" in exc_str
+            or "billing" in exc_str
+            or "429" in exc_str
+        ):
+            error_code = "OPENAI_QUOTA_EXCEEDED"
+            message = "OpenAI quota or billing limit reached."
+        elif "timeout" in exc_name.lower() or "timeout" in exc_str:
+            error_code = "OPENAI_TIMEOUT"
+            message = "OpenAI request timed out."
+        else:
+            error_code = "DEVELOP_FAILED"
+            message = "Unable to generate a response at this time."
+
+        return JSONResponse(
+            status_code=500,
+            content={
+                "error": error_code,
+                "message": message,
             },
         )
 
