@@ -2,8 +2,9 @@
 
 import React, { useState } from 'react';
 import { DocumentUploader } from '@/components/DocumentUploader';
-import { FileText, MoreHorizontal, Search, Clock } from 'lucide-react';
+import { FileText, MoreHorizontal, Search, Clock, Sparkles } from 'lucide-react';
 import Link from 'next/link';
+import { NewWorkModal } from '@/components/NewWorkModal';
 
 interface Document {
   id: string;
@@ -20,12 +21,13 @@ interface Props {
 
 export function DashboardContent({ documents, userName }: Props) {
   const [searchQuery, setSearchQuery] = useState('');
+  const [isNewWorkModalOpen, setIsNewWorkModalOpen] = useState(false);
 
   const filteredDocuments = documents.filter(doc => 
     doc.title.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const greeting = userName ? `Good afternoon, ${userName}` : 'Your documents';
+  const greeting = userName ? `Good afternoon, ${userName}.` : 'Welcome back.';
   const latestDoc = documents.length > 0 ? documents[0] : null;
 
   return (
@@ -34,8 +36,11 @@ export function DashboardContent({ documents, userName }: Props) {
       <div className="flex flex-col md:flex-row md:items-end justify-between mb-10 gap-6">
         <div>
           <h1 className="text-[28px] font-bold text-[#101828] mb-1">{greeting}</h1>
+          <p className="text-[15px] font-medium text-[#101828] mt-2 mb-1">
+            What are you working on?
+          </p>
           <p className="text-[15px] text-[#667085]">
-            Review, refine and manage your writing in one place.
+            Start wherever you are — from a rough thought to an existing draft.
           </p>
         </div>
         <div className="relative w-full md:w-[280px]">
@@ -52,9 +57,47 @@ export function DashboardContent({ documents, userName }: Props) {
         </div>
       </div>
 
-      {/* Primary Upload Experience */}
-      <div className="mb-10">
-        <DocumentUploader />
+      {/* Entry Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-10">
+        
+        {/* Start with an idea */}
+        <div className="bg-white border border-[#E5EAF0] rounded-[10px] p-6 shadow-[0_1px_2px_rgba(0,0,0,0.02)] flex flex-col hover:border-[#CBD5E1] transition-colors h-full">
+          <div className="w-10 h-10 rounded-[8px] bg-accent/10 flex items-center justify-center text-accent mb-4">
+            <Sparkles size={20} />
+          </div>
+          <h2 className="text-[16px] font-bold text-[#101828] mb-1">Start with an idea</h2>
+          <p className="text-[14px] text-[#667085] flex-grow mb-6">
+            Have something in mind? Develop it into a clear piece of work with Verba.
+          </p>
+          <button 
+            onClick={() => setIsNewWorkModalOpen(true)}
+            className="w-full h-[38px] px-5 inline-flex items-center justify-center bg-white border border-[#E5EAF0] text-[#101828] font-semibold rounded-[8px] hover:bg-slate-50 transition-colors text-[14px] shadow-sm"
+          >
+            Start developing &rarr;
+          </button>
+        </div>
+
+        {/* Start blank */}
+        <div className="bg-white border border-[#E5EAF0] rounded-[10px] p-6 shadow-[0_1px_2px_rgba(0,0,0,0.02)] flex flex-col hover:border-[#CBD5E1] transition-colors h-full">
+          <div className="w-10 h-10 rounded-[8px] bg-[#F1F5F9] flex items-center justify-center text-[#475569] mb-4">
+            <FileText size={20} />
+          </div>
+          <h2 className="text-[16px] font-bold text-[#101828] mb-1">Start blank</h2>
+          <p className="text-[14px] text-[#667085] flex-grow mb-6">
+            Know exactly what you need to write? Open an empty document.
+          </p>
+          <button 
+            onClick={() => setIsNewWorkModalOpen(true)}
+            className="w-full h-[38px] px-5 inline-flex items-center justify-center bg-white border border-[#E5EAF0] text-[#101828] font-semibold rounded-[8px] hover:bg-slate-50 transition-colors text-[14px] shadow-sm"
+          >
+            Open blank document
+          </button>
+        </div>
+
+        {/* Upload existing work */}
+        <div className="h-full">
+           <DocumentUploader />
+        </div>
       </div>
 
       {/* Continue where you left off */}
@@ -67,7 +110,7 @@ export function DashboardContent({ documents, userName }: Props) {
                 <FileText size={20} className="text-accent" />
               </div>
               <div className="min-w-0">
-                <h3 className="text-[15px] font-semibold text-[#101828] truncate leading-snug">{latestDoc.title}.docx</h3>
+                <h3 className="text-[15px] font-semibold text-[#101828] truncate leading-snug">{latestDoc.title}</h3>
                 <div className="flex items-center text-[13px] text-[#667085] mt-1 space-x-3">
                   <span className="flex items-center"><Clock size={14} className="mr-1.5" /> Updated {new Date(latestDoc.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
                   <span>&middot;</span>
@@ -79,7 +122,7 @@ export function DashboardContent({ documents, userName }: Props) {
               href={`/workspace/${latestDoc.id}`}
               className="shrink-0 h-[36px] px-5 inline-flex items-center justify-center bg-white border border-[#E5EAF0] text-[#101828] font-medium rounded-[8px] hover:bg-slate-50 transition-colors text-[13px]"
             >
-              Continue review
+              Continue work
             </Link>
           </div>
         </div>
@@ -88,7 +131,7 @@ export function DashboardContent({ documents, userName }: Props) {
       {/* User Documents */}
       <div>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-[15px] font-semibold text-[#101828]">Recent documents</h2>
+          <h2 className="text-[15px] font-semibold text-[#101828]">Recent work</h2>
         </div>
 
         {!documents || documents.length === 0 ? (
@@ -96,15 +139,15 @@ export function DashboardContent({ documents, userName }: Props) {
             <div className="w-12 h-12 rounded-[10px] bg-slate-50 border border-slate-100 text-slate-400 flex items-center justify-center mb-4">
               <FileText size={24} />
             </div>
-            <h3 className="text-[15px] font-semibold text-[#101828] mb-1">No documents yet</h3>
+            <h3 className="text-[15px] font-semibold text-[#101828] mb-1">No work yet</h3>
             <p className="text-[14px] text-[#667085] max-w-sm mt-1 mb-6">
-              Upload your first Word document to start reviewing and refining your writing.
+              Start with an idea, open a blank document, or upload existing work to get started.
             </p>
             <button 
-              onClick={() => document.querySelector('input[type="file"]')?.dispatchEvent(new MouseEvent('click'))}
+              onClick={() => setIsNewWorkModalOpen(true)}
               className="h-[38px] px-5 inline-flex items-center justify-center bg-accent text-white font-medium rounded-[8px] hover:bg-accent-hover transition-colors text-[13px] shadow-sm"
             >
-              Upload document
+              Start new work
             </button>
           </div>
         ) : filteredDocuments.length === 0 ? (
@@ -174,6 +217,12 @@ export function DashboardContent({ documents, userName }: Props) {
           </div>
         )}
       </div>
+
+      <NewWorkModal 
+        isOpen={isNewWorkModalOpen} 
+        onClose={() => setIsNewWorkModalOpen(false)} 
+        onUploadSelect={() => document.querySelector('input[type="file"]')?.dispatchEvent(new MouseEvent('click'))}
+      />
     </div>
   );
 }

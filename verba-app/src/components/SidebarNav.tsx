@@ -5,9 +5,12 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Home, FileText, Settings, Plus, User, LogOut } from 'lucide-react';
 import { logout } from '@/app/(auth)/actions';
+import { useState } from 'react';
+import { NewWorkModal } from '@/components/NewWorkModal';
 
 export function SidebarNav() {
   const pathname = usePathname();
+  const [isNewWorkModalOpen, setIsNewWorkModalOpen] = useState(false);
 
   const primaryNav = [
     { name: 'Home', href: '/dashboard', icon: Home },
@@ -25,13 +28,13 @@ export function SidebarNav() {
   return (
     <div className="flex flex-col flex-1 h-full">
       <div className="p-4 pt-6">
-        <Link 
-          href="/dashboard"
+        <button 
+          onClick={() => setIsNewWorkModalOpen(true)}
           className="flex items-center justify-center w-full h-[44px] bg-accent text-white font-medium rounded-[8px] hover:bg-accent-hover transition-colors text-[14px] shadow-sm"
         >
           <Plus size={18} className="mr-2" />
           New document
-        </Link>
+        </button>
       </div>
       
       <nav className="px-3 py-2 space-y-1">
@@ -99,6 +102,15 @@ export function SidebarNav() {
           </button>
         </form>
       </div>
+
+      <NewWorkModal 
+        isOpen={isNewWorkModalOpen} 
+        onClose={() => setIsNewWorkModalOpen(false)} 
+        onUploadSelect={() => {
+          // Redirect to dashboard with upload intent, or we could handle it via context
+          window.location.href = '/dashboard';
+        }}
+      />
     </div>
   );
 }

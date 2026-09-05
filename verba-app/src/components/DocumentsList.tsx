@@ -13,6 +13,8 @@ interface Document {
   created_at: string;
 }
 
+import { NewWorkModal } from '@/components/NewWorkModal';
+
 interface Props {
   initialDocuments: Document[];
 }
@@ -23,6 +25,7 @@ export function DocumentsList({ initialDocuments }: Props) {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isNewWorkModalOpen, setIsNewWorkModalOpen] = useState(false);
 
   const filteredDocuments = documents.filter(doc => 
     doc.title.toLowerCase().includes(searchQuery.toLowerCase())
@@ -62,13 +65,13 @@ export function DocumentsList({ initialDocuments }: Props) {
             Manage and continue working on your documents.
           </p>
         </div>
-        <Link
-          href="/dashboard"
+        <button
+          onClick={() => setIsNewWorkModalOpen(true)}
           className="shrink-0 h-[40px] px-5 inline-flex items-center justify-center bg-accent text-white font-medium rounded-[8px] hover:bg-accent-hover transition-colors text-[14px] shadow-sm"
         >
           <Plus size={18} className="mr-2" />
           New document
-        </Link>
+        </button>
       </div>
 
       {/* Controls */}
@@ -97,12 +100,12 @@ export function DocumentsList({ initialDocuments }: Props) {
           <p className="text-[14px] text-[#667085] max-w-sm mt-1 mb-6">
             Upload your first Word document to start writing and reviewing with Verba.
           </p>
-          <Link 
-            href="/dashboard"
+          <button 
+            onClick={() => setIsNewWorkModalOpen(true)}
             className="h-[38px] px-5 inline-flex items-center justify-center bg-accent text-white font-medium rounded-[8px] hover:bg-accent-hover transition-colors text-[13px] shadow-sm"
           >
             New document
-          </Link>
+          </button>
         </div>
       ) : filteredDocuments.length === 0 ? (
         <div className="bg-white border border-[#E5EAF0] rounded-[10px] flex flex-col items-center justify-center text-center shadow-[0_1px_2px_rgba(0,0,0,0.02)] h-[180px]">
@@ -217,6 +220,14 @@ export function DocumentsList({ initialDocuments }: Props) {
           </div>
         </div>
       )}
+
+      <NewWorkModal 
+        isOpen={isNewWorkModalOpen} 
+        onClose={() => setIsNewWorkModalOpen(false)} 
+        onUploadSelect={() => {
+          window.location.href = '/dashboard';
+        }}
+      />
     </div>
   );
 }

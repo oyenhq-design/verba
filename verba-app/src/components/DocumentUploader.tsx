@@ -136,107 +136,102 @@ export function DocumentUploader() {
   };
 
   return (
-    <div className="bg-white rounded-[10px] p-1.5 shadow-[0_1px_2px_rgba(0,0,0,0.03)] border border-[#E5EAF0]">
+    <div className="bg-white rounded-[10px] shadow-[0_1px_2px_rgba(0,0,0,0.02)] border border-[#E5EAF0] h-full flex flex-col hover:border-[#CBD5E1] transition-colors p-6">
       <div 
-        className={`w-full rounded-[8px] p-5 transition-colors flex flex-col md:flex-row md:items-center justify-between gap-4 border border-dashed
-          ${status === 'error' ? 'border-status-error/50 bg-status-error/5' : 
-            status === 'selected' || isDragOver ? 'border-accent/50 bg-accent/5' : 'border-[#CBD5E1] hover:border-slate-400 bg-[#FAFAFA]'
+        className={`w-full rounded-[8px] flex-grow flex flex-col items-start
+          ${status === 'error' ? 'text-status-error' : 
+            status === 'selected' || isDragOver ? 'text-accent' : 'text-[#101828]'
           }`}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        style={{ minHeight: '120px' }}
       >
-        {/* Left side info */}
-        <div className="flex items-center space-x-5">
-          <div className={`w-12 h-12 rounded-[10px] flex items-center justify-center shrink-0 shadow-sm
-            ${status === 'empty' || status === 'error' ? 'bg-white border border-[#E5EAF0] text-slate-600' : 
-              status === 'uploaded' ? 'bg-status-success/10 text-status-success border border-status-success/20' :
-              'bg-accent/10 text-accent border border-accent/20'
-            }`}
-          >
-            {status === 'uploaded' ? <CheckCircle size={22} /> : 
-             status === 'error' ? <AlertCircle size={22} /> :
-             (status === 'uploading' || status === 'processing') ? <Loader2 size={22} className="animate-spin" /> :
-             status === 'selected' ? <FileText size={22} /> :
-             <Upload size={22} />}
-          </div>
-          
-          <div>
-            {status === 'empty' && (
-              <>
-                <h3 className="text-[15px] font-semibold text-[#101828]">Upload a document</h3>
-                <p className="text-[14px] text-[#667085] mt-0.5">Drop a Word document here or select one from your computer.</p>
-                <p className="text-[12px] text-slate-400 mt-1 font-medium tracking-wide">DOCX &middot; Maximum 25 MB</p>
-              </>
-            )}
+        <div className={`w-10 h-10 rounded-[8px] flex items-center justify-center shrink-0 mb-4
+          ${status === 'empty' || status === 'error' ? 'bg-[#F1F5F9] text-[#475569]' : 
+            status === 'uploaded' ? 'bg-status-success/10 text-status-success' :
+            'bg-accent/10 text-accent'
+          }`}
+        >
+          {status === 'uploaded' ? <CheckCircle size={20} /> : 
+           status === 'error' ? <AlertCircle size={20} /> :
+           (status === 'uploading' || status === 'processing') ? <Loader2 size={20} className="animate-spin" /> :
+           status === 'selected' ? <FileText size={20} /> :
+           <Upload size={20} />}
+        </div>
+        
+        <div className="flex-grow flex flex-col mb-6">
+          {status === 'empty' && (
+            <>
+              <h2 className="text-[16px] font-bold text-[#101828] mb-1">Upload existing work</h2>
+              <p className="text-[14px] text-[#667085]">Already started? Bring your document into Verba and continue developing it here.</p>
+            </>
+          )}
 
-            {status === 'selected' && file && (
-              <>
-                <h3 className="text-[15px] font-semibold text-[#101828]">{file.name}</h3>
-                <p className="text-[14px] text-[#667085] mt-0.5">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
-              </>
-            )}
+          {status === 'selected' && file && (
+            <>
+              <h2 className="text-[16px] font-bold text-[#101828] mb-1">{file.name}</h2>
+              <p className="text-[14px] text-[#667085]">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
+            </>
+          )}
 
-            {(status === 'uploading' || status === 'processing') && (
-              <>
-                <h3 className="text-[15px] font-semibold text-[#101828]">
-                  {status === 'uploading' ? 'Uploading document...' : 'Parsing document structure...'}
-                </h3>
-                <p className="text-[14px] text-[#667085] mt-0.5">
-                  {status === 'uploading' ? 'Securely storing your original file.' : 'Extracting headings and paragraphs.'}
-                </p>
-              </>
-            )}
+          {(status === 'uploading' || status === 'processing') && (
+            <>
+              <h2 className="text-[16px] font-bold text-[#101828] mb-1">
+                {status === 'uploading' ? 'Uploading...' : 'Parsing structure...'}
+              </h2>
+              <p className="text-[14px] text-[#667085]">
+                {status === 'uploading' ? 'Securely storing file.' : 'Extracting content.'}
+              </p>
+            </>
+          )}
 
-            {status === 'uploaded' && (
-              <>
-                <h3 className="text-[15px] font-semibold text-[#101828]">Document Ready!</h3>
-                <p className="text-[14px] text-[#667085] mt-0.5">Redirecting to your workspace...</p>
-              </>
-            )}
+          {status === 'uploaded' && (
+            <>
+              <h2 className="text-[16px] font-bold text-[#101828] mb-1">Document Ready!</h2>
+              <p className="text-[14px] text-[#667085]">Redirecting...</p>
+            </>
+          )}
 
-            {status === 'error' && (
-              <>
-                <h3 className="text-[15px] font-semibold text-status-error">Processing Failed</h3>
-                <p className="text-[14px] text-[#667085] mt-0.5">{errorMessage}</p>
-              </>
-            )}
-          </div>
+          {status === 'error' && (
+            <>
+              <h2 className="text-[16px] font-bold text-status-error mb-1">Processing Failed</h2>
+              <p className="text-[14px] text-[#667085]">{errorMessage}</p>
+            </>
+          )}
         </div>
 
-        {/* Right side actions */}
-        <div className="shrink-0 flex items-center space-x-3">
+        {/* Actions */}
+        <div className="w-full">
           {status === 'empty' && (
             <button 
               onClick={() => fileInputRef.current?.click()}
-              className="h-[38px] px-5 inline-flex items-center justify-center bg-white border border-[#E5EAF0] text-[#101828] font-semibold rounded-[8px] hover:bg-slate-50 hover:border-slate-300 transition-colors text-[14px] shadow-[0_1px_2px_rgba(0,0,0,0.02)]"
+              className="w-full h-[38px] px-5 inline-flex items-center justify-center bg-white border border-[#E5EAF0] text-[#101828] font-semibold rounded-[8px] hover:bg-slate-50 transition-colors text-[14px] shadow-sm"
             >
               Choose document
             </button>
           )}
 
           {status === 'selected' && (
-            <>
+            <div className="flex gap-3">
               <button 
                 onClick={() => setStatus('empty')}
-                className="h-[38px] px-5 inline-flex items-center justify-center bg-white border border-[#E5EAF0] text-[#101828] font-medium rounded-[8px] hover:bg-slate-50 transition-colors text-[14px] shadow-[0_1px_2px_rgba(0,0,0,0.02)]"
+                className="flex-1 h-[38px] px-5 inline-flex items-center justify-center bg-white border border-[#E5EAF0] text-[#101828] font-medium rounded-[8px] hover:bg-slate-50 transition-colors text-[14px]"
               >
                 Cancel
               </button>
               <button 
                 onClick={handleUpload}
-                className="h-[38px] px-5 inline-flex items-center justify-center bg-accent text-white font-semibold rounded-[8px] hover:bg-accent-hover transition-colors text-[14px] shadow-sm"
+                className="flex-1 h-[38px] px-5 inline-flex items-center justify-center bg-accent text-white font-semibold rounded-[8px] hover:bg-accent-hover transition-colors text-[14px]"
               >
                 Upload
               </button>
-            </>
+            </div>
           )}
 
           {status === 'error' && (
             <button 
               onClick={() => setStatus('empty')}
-              className="h-[38px] px-5 inline-flex items-center justify-center bg-white border border-[#E5EAF0] text-[#101828] font-semibold rounded-[8px] hover:bg-slate-50 transition-colors text-[14px] shadow-[0_1px_2px_rgba(0,0,0,0.02)]"
+              className="w-full h-[38px] px-5 inline-flex items-center justify-center bg-white border border-[#E5EAF0] text-[#101828] font-semibold rounded-[8px] hover:bg-slate-50 transition-colors text-[14px]"
             >
               Try Again
             </button>
