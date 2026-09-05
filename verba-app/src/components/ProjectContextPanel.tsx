@@ -80,7 +80,7 @@ export function ProjectContextPanel({ context }: Props) {
   };
 
   return (
-    <div className="bg-[#F8FAFC] border-l border-[#E5EAF0] h-full overflow-y-auto flex flex-col w-full">
+    <div className="bg-[#F8FAFC] flex flex-col w-full">
       <div className="p-6 pb-4 border-b border-[#E5EAF0] shrink-0 sticky top-0 bg-[#F8FAFC] z-10">
         <h2 className="text-[16px] font-bold text-[#101828]">Project Context</h2>
         <p className="text-[13px] text-[#667085] mt-1">
