@@ -2,60 +2,96 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Save, Loader2, ArrowRight, Plus, Trash2, X } from 'lucide-react';
+import { ArrowLeft, Save, Loader2, ArrowRight, Plus, Trash2, X, CheckCircle2, Circle } from 'lucide-react';
+
+interface Readiness {
+  is_ready: boolean;
+  work_type: string;
+  work_type_label: string;
+  shaped_count: number;
+  total_relevant: number;
+  missing_core: string[];
+  missing_optional: string[];
+  structure_ready: boolean;
+  direction_summary: string;
+  approach_summary: string;
+}
 
 interface ProjectContext {
-  working_title?: string | null;
-  work_type?: string | null;
-  field?: string | null;
-  topic?: string | null;
-  problem?: string | null;
-  aim?: string | null;
-  objectives?: string[];
-  scope?: string | null;
-  methodology?: string | null;
-  tools?: string[];
-  geography?: string | null;
-  citation_style?: string | null;
-  economic_analysis?: boolean | null;
-  focus?: string | null;
-  constraints?: string[];
-  context_summary?: string | null;
+  [key: string]: unknown;
 }
 
 interface Props {
   workId: string;
   initialTitle: string;
   initialContext: ProjectContext;
+  initialReadiness?: Readiness | null;
 }
 
-const FIELD_GROUPS = [
-  {
-    title: 'Core Identity',
-    fields: ['working_title', 'work_type', 'field', 'topic']
-  },
-  {
-    title: 'Purpose',
-    fields: ['problem', 'aim', 'objectives', 'focus']
-  },
-  {
-    title: 'Approach',
-    fields: ['scope', 'methodology', 'tools', 'geography', 'constraints']
-  },
-  {
-    title: 'Other Details',
-    fields: ['citation_style', 'economic_analysis', 'context_summary']
-  }
-];
+interface FieldConfig {
+  label: string;
+  group: 'Project' | 'Direction' | 'Approach' | 'Requirements' | 'Structure';
+  order: number;
+}
 
-const TEXTAREA_FIELDS = new Set(['problem', 'aim', 'scope', 'methodology', 'focus', 'context_summary']);
-const LIST_FIELDS = new Set(['objectives', 'tools', 'constraints']);
+const CONTEXT_FIELD_CONFIG: Record<string, FieldConfig> = {
+  working_title: { label: 'Working title', group: 'Project', order: 1 },
+  work_type: { label: 'Work type', group: 'Project', order: 2 },
+  field: { label: 'Field', group: 'Project', order: 3 },
+  academic_level: { label: 'Academic level', group: 'Project', order: 4 },
+  topic: { label: 'Topic', group: 'Project', order: 5 },
+  
+  problem: { label: 'Problem', group: 'Direction', order: 10 },
+  aim: { label: 'Aim', group: 'Direction', order: 11 },
+  objectives: { label: 'Objectives', group: 'Direction', order: 12 },
+  research_questions: { label: 'Research questions', group: 'Direction', order: 13 },
+  hypotheses: { label: 'Hypotheses', group: 'Direction', order: 14 },
+  position: { label: 'Position', group: 'Direction', order: 15 },
+  main_arguments: { label: 'Main arguments', group: 'Direction', order: 16 },
+  scope: { label: 'Scope', group: 'Direction', order: 17 },
+  focus: { label: 'Focus', group: 'Direction', order: 18 },
+  
+  methodology: { label: 'Methodology', group: 'Approach', order: 20 },
+  research_design: { label: 'Research design', group: 'Approach', order: 21 },
+  population: { label: 'Population', group: 'Approach', order: 22 },
+  sample: { label: 'Sample', group: 'Approach', order: 23 },
+  variables: { label: 'Variables', group: 'Approach', order: 24 },
+  data_requirements: { label: 'Data requirements', group: 'Approach', order: 25 },
+  data_sources: { label: 'Data sources', group: 'Approach', order: 26 },
+  analysis_approach: { label: 'Analysis approach', group: 'Approach', order: 27 },
+  tools: { label: 'Tools', group: 'Approach', order: 28 },
+  software: { label: 'Software', group: 'Approach', order: 29 },
+  geography: { label: 'Geography', group: 'Approach', order: 30 },
+  assumptions: { label: 'Assumptions', group: 'Approach', order: 31 },
+  limitations: { label: 'Limitations', group: 'Approach', order: 32 },
+  constraints: { label: 'Constraints', group: 'Approach', order: 33 },
+  evidence_needs: { label: 'Evidence needs', group: 'Approach', order: 34 },
+  literature_themes: { label: 'Literature themes', group: 'Approach', order: 35 },
+  literature_gap: { label: 'Literature gap', group: 'Approach', order: 36 },
+  technical_focus: { label: 'Technical focus', group: 'Approach', order: 37 },
+  economic_analysis: { label: 'Economic analysis', group: 'Approach', order: 38 },
+  validation_approach: { label: 'Validation approach', group: 'Approach', order: 39 },
+
+  citation_style: { label: 'Citation style', group: 'Requirements', order: 50 },
+  target_length: { label: 'Target length', group: 'Requirements', order: 51 },
+  deadline: { label: 'Deadline', group: 'Requirements', order: 52 },
+  institution_requirements: { label: 'Institution requirements', group: 'Requirements', order: 53 },
+  course_requirements: { label: 'Course requirements', group: 'Requirements', order: 54 },
+  
+  planned_sections: { label: 'Planned sections', group: 'Structure', order: 60 }
+};
+
+const GROUP_ORDER = ['Project', 'Direction', 'Approach', 'Requirements', 'Structure'];
+
+const TEXTAREA_FIELDS = new Set(['problem', 'aim', 'scope', 'methodology', 'focus', 'context_summary', 'research_design', 'analysis_approach', 'literature_gap']);
+const LIST_FIELDS = new Set(['objectives', 'tools', 'constraints', 'research_questions', 'hypotheses', 'main_arguments', 'counterarguments', 'variables', 'data_requirements', 'data_sources', 'assumptions', 'limitations', 'evidence_needs', 'literature_themes', 'planned_sections']);
 const BOOLEAN_FIELDS = new Set(['economic_analysis']);
 
-export function ShapeClientPage({ workId, initialTitle, initialContext }: Props) {
+export function ShapeClientPage({ workId, initialTitle, initialContext, initialReadiness }: Props) {
   const router = useRouter();
   const [context, setContext] = useState<ProjectContext>(initialContext);
   const [title, setTitle] = useState(initialTitle);
+  const [readiness, setReadiness] = useState<Readiness | null>(initialReadiness || null);
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
   const [showBuildModal, setShowBuildModal] = useState(false);
@@ -84,36 +120,36 @@ export function ShapeClientPage({ workId, initialTitle, initialContext }: Props)
     }
   };
 
-  const handleTextChange = (field: keyof ProjectContext, value: string) => {
+  const handleTextChange = (field: string, value: string) => {
     setContext(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleBooleanChange = (field: keyof ProjectContext, value: boolean) => {
+  const handleBooleanChange = (field: string, value: boolean) => {
     setContext(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleListChange = (field: keyof ProjectContext, newList: string[]) => {
+  const handleListChange = (field: string, newList: string[]) => {
     setContext(prev => ({ ...prev, [field]: newList }));
   };
 
-  const handleAddListItem = (field: keyof ProjectContext) => {
+  const handleAddListItem = (field: string) => {
     const currentList = (context[field] as string[]) || [];
     handleListChange(field, [...currentList, '']);
   };
 
-  const handleUpdateListItem = (field: keyof ProjectContext, index: number, value: string) => {
+  const handleUpdateListItem = (field: string, index: number, value: string) => {
     const currentList = [...((context[field] as string[]) || [])];
     currentList[index] = value;
     handleListChange(field, currentList);
   };
 
-  const handleRemoveListItem = (field: keyof ProjectContext, index: number) => {
+  const handleRemoveListItem = (field: string, index: number) => {
     const currentList = [...((context[field] as string[]) || [])];
     currentList.splice(index, 1);
     handleListChange(field, currentList);
   };
 
-  const handleMoveListItem = (field: keyof ProjectContext, index: number, direction: 'up' | 'down') => {
+  const handleMoveListItem = (field: string, index: number, direction: 'up' | 'down') => {
     const currentList = [...((context[field] as string[]) || [])];
     if (direction === 'up' && index > 0) {
       const temp = currentList[index - 1];
@@ -141,6 +177,9 @@ export function ShapeClientPage({ workId, initialTitle, initialContext }: Props)
       const data = await res.json();
       setContext(data.context);
       setTitle(data.title);
+      if (data.readiness) {
+        setReadiness(data.readiness);
+      }
       setSaveMessage('Saved successfully');
       setTimeout(() => setSaveMessage(''), 3000);
     } catch (err) {
@@ -151,12 +190,31 @@ export function ShapeClientPage({ workId, initialTitle, initialContext }: Props)
     }
   };
 
+  const isDefined = (val: unknown) => {
+    if (val === null || val === undefined || val === '') return false;
+    if (Array.isArray(val) && val.length === 0) return false;
+    if (typeof val === 'object' && Object.keys(val).length === 0) return false;
+    return true;
+  };
+
+  const definedKeys = Object.keys(context).filter(k => isDefined(context[k]) && CONTEXT_FIELD_CONFIG[k]);
+  
+  const groupedDefinedKeys: Record<string, string[]> = {};
+  GROUP_ORDER.forEach(g => groupedDefinedKeys[g] = []);
+  
+  definedKeys.forEach(k => {
+    groupedDefinedKeys[CONTEXT_FIELD_CONFIG[k].group].push(k);
+  });
+  
+  Object.keys(groupedDefinedKeys).forEach(g => {
+    groupedDefinedKeys[g].sort((a, b) => CONTEXT_FIELD_CONFIG[a].order - CONTEXT_FIELD_CONFIG[b].order);
+  });
+
   const renderField = (field: string) => {
-    const typedField = field as keyof ProjectContext;
-    const label = field.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+    const label = CONTEXT_FIELD_CONFIG[field]?.label || field;
 
     if (LIST_FIELDS.has(field)) {
-      const list = (context[typedField] as string[]) || [];
+      const list = (context[field] as string[]) || [];
       return (
         <div key={field} className="mb-6">
           <label className="block text-[14px] font-semibold text-[#334155] mb-2">{label}</label>
@@ -164,18 +222,18 @@ export function ShapeClientPage({ workId, initialTitle, initialContext }: Props)
             {list.map((item, idx) => (
               <div key={idx} className="flex items-start gap-2 group">
                 <div className="flex flex-col gap-1 mt-2 text-[#94A3B8] opacity-0 group-hover:opacity-100 transition-opacity">
-                   <button onClick={() => handleMoveListItem(typedField, idx, 'up')} disabled={idx === 0} className="hover:text-accent disabled:opacity-30">↑</button>
-                   <button onClick={() => handleMoveListItem(typedField, idx, 'down')} disabled={idx === list.length - 1} className="hover:text-accent disabled:opacity-30">↓</button>
+                   <button onClick={() => handleMoveListItem(field, idx, 'up')} disabled={idx === 0} className="hover:text-accent disabled:opacity-30">↑</button>
+                   <button onClick={() => handleMoveListItem(field, idx, 'down')} disabled={idx === list.length - 1} className="hover:text-accent disabled:opacity-30">↓</button>
                 </div>
                 <input
                   type="text"
                   value={item}
-                  onChange={(e) => handleUpdateListItem(typedField, idx, e.target.value)}
+                  onChange={(e) => handleUpdateListItem(field, idx, e.target.value)}
                   className="flex-1 px-3 py-2 border border-[#E2E8F0] rounded-md focus:outline-none focus:border-accent text-[14px]"
-                  placeholder={`Add ${label.toLowerCase()}...`}
+                  placeholder={field === 'planned_sections' ? `Section name...` : `Add ${label.toLowerCase()}...`}
                 />
                 <button 
-                  onClick={() => handleRemoveListItem(typedField, idx)}
+                  onClick={() => handleRemoveListItem(field, idx)}
                   className="p-2 text-[#94A3B8] hover:text-red-500 hover:bg-red-50 rounded-md transition-colors"
                 >
                   <Trash2 size={16} />
@@ -183,10 +241,10 @@ export function ShapeClientPage({ workId, initialTitle, initialContext }: Props)
               </div>
             ))}
             <button 
-              onClick={() => handleAddListItem(typedField)}
+              onClick={() => handleAddListItem(field)}
               className="flex items-center gap-1 text-[13px] font-medium text-accent hover:text-accent-hover mt-2"
             >
-              <Plus size={14} /> Add item
+              <Plus size={14} /> {field === 'planned_sections' ? 'Add section' : 'Add item'}
             </button>
           </div>
         </div>
@@ -194,14 +252,14 @@ export function ShapeClientPage({ workId, initialTitle, initialContext }: Props)
     }
 
     if (BOOLEAN_FIELDS.has(field)) {
-      const val = context[typedField] as boolean | null;
+      const val = context[field] as boolean | null;
       return (
         <div key={field} className="mb-6 flex items-center gap-3">
           <input
             type="checkbox"
             id={field}
             checked={val || false}
-            onChange={(e) => handleBooleanChange(typedField, e.target.checked)}
+            onChange={(e) => handleBooleanChange(field, e.target.checked)}
             className="w-4 h-4 text-accent border-[#E2E8F0] rounded focus:ring-accent cursor-pointer"
           />
           <label htmlFor={field} className="text-[14px] font-semibold text-[#334155] cursor-pointer">
@@ -216,8 +274,8 @@ export function ShapeClientPage({ workId, initialTitle, initialContext }: Props)
         <div key={field} className="mb-6">
           <label className="block text-[14px] font-semibold text-[#334155] mb-2">{label}</label>
           <textarea
-            value={(context[typedField] as string) || ''}
-            onChange={(e) => handleTextChange(typedField, e.target.value)}
+            value={(context[field] as string) || ''}
+            onChange={(e) => handleTextChange(field, e.target.value)}
             rows={4}
             className="w-full px-3 py-2 border border-[#E2E8F0] rounded-md focus:outline-none focus:border-accent text-[14px] resize-y min-h-[100px]"
             placeholder={`Describe the ${label.toLowerCase()}...`}
@@ -231,8 +289,8 @@ export function ShapeClientPage({ workId, initialTitle, initialContext }: Props)
         <label className="block text-[14px] font-semibold text-[#334155] mb-2">{label}</label>
         <input
           type="text"
-          value={(context[typedField] as string) || ''}
-          onChange={(e) => handleTextChange(typedField, e.target.value)}
+          value={(context[field] as string) || ''}
+          onChange={(e) => handleTextChange(field, e.target.value)}
           className="w-full px-3 py-2 border border-[#E2E8F0] rounded-md focus:outline-none focus:border-accent text-[14px]"
           placeholder={`Enter ${label.toLowerCase()}...`}
         />
@@ -278,7 +336,7 @@ export function ShapeClientPage({ workId, initialTitle, initialContext }: Props)
             onClick={() => setShowBuildModal(true)}
             className="flex items-center gap-2 px-4 py-2 bg-accent text-white rounded-md text-[14px] font-medium hover:bg-accent-hover transition-colors"
           >
-            Build my document
+            Start writing
             <ArrowRight size={16} />
           </button>
         </div>
@@ -288,6 +346,19 @@ export function ShapeClientPage({ workId, initialTitle, initialContext }: Props)
       <div className="flex-1 overflow-y-auto p-6 md:p-10">
         <div className="max-w-4xl mx-auto">
           <div className="mb-8">
+            {readiness && (
+              <div className="mb-2">
+                <span className="text-[13px] font-semibold text-accent uppercase tracking-wide">{readiness.work_type_label}</span>
+                <div className="text-[#64748B] text-[14px] mt-1 font-medium flex items-center gap-2">
+                  {readiness.is_ready ? (
+                    <><span className="text-emerald-500 flex items-center gap-1"><CheckCircle2 size={16} /> Core direction ready</span> • </>
+                  ) : (
+                    <><span className="text-amber-500">Developing direction</span> • </>
+                  )}
+                  <span>{readiness.shaped_count} of {readiness.total_relevant} relevant areas shaped</span>
+                </div>
+              </div>
+            )}
             <h2 className="text-[24px] font-bold text-[#0F172A] tracking-tight">Your work is taking shape</h2>
             <p className="text-[#64748B] mt-2 text-[15px]">
               Review and refine the project context gathered during your conversation. 
@@ -296,20 +367,25 @@ export function ShapeClientPage({ workId, initialTitle, initialContext }: Props)
           </div>
 
           <div className="space-y-8">
-            {FIELD_GROUPS.map((group) => (
-              <div key={group.title} className="bg-white p-6 rounded-xl border border-[#E5EAF0] shadow-sm">
-                <h3 className="text-[16px] font-bold text-[#0F172A] mb-6 pb-2 border-b border-[#F1F5F9]">
-                  {group.title}
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2">
-                  {group.fields.map(field => (
-                    <div key={field} className={TEXTAREA_FIELDS.has(field) || LIST_FIELDS.has(field) ? 'md:col-span-2' : ''}>
-                      {renderField(field)}
-                    </div>
-                  ))}
+            {GROUP_ORDER.map((group) => {
+              const keys = groupedDefinedKeys[group];
+              if (!keys || keys.length === 0) return null;
+
+              return (
+                <div key={group} className="bg-white p-6 rounded-xl border border-[#E5EAF0] shadow-sm">
+                  <h3 className="text-[16px] font-bold text-[#0F172A] mb-6 pb-2 border-b border-[#F1F5F9]">
+                    {group}
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2">
+                    {keys.map(field => (
+                      <div key={field} className={TEXTAREA_FIELDS.has(field) || LIST_FIELDS.has(field) ? 'md:col-span-2' : ''}>
+                        {renderField(field)}
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
           
           <div className="mt-8 pt-8 border-t border-[#E5EAF0] flex justify-between items-center">
@@ -323,7 +399,7 @@ export function ShapeClientPage({ workId, initialTitle, initialContext }: Props)
               onClick={() => setShowBuildModal(true)}
               className="flex items-center gap-2 px-5 py-2.5 bg-accent text-white rounded-md text-[14px] font-medium hover:bg-accent-hover transition-colors shadow-sm"
             >
-              Build my document
+              Start writing
               <ArrowRight size={16} />
             </button>
           </div>
@@ -331,12 +407,17 @@ export function ShapeClientPage({ workId, initialTitle, initialContext }: Props)
         </div>
       </div>
 
-      {/* Build Modal */}
+      {/* Start Writing Modal */}
       {showBuildModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col">
-            <div className="flex justify-between items-center p-6 border-b border-[#E2E8F0]">
-              <h3 className="text-[18px] font-bold text-[#0F172A]">Ready to start writing?</h3>
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-xl overflow-hidden flex flex-col">
+            <div className="flex justify-between items-start p-6 border-b border-[#E2E8F0]">
+              <div>
+                <span className="text-[12px] font-bold text-emerald-500 flex items-center gap-1.5 mb-1 tracking-wide uppercase">
+                  <CheckCircle2 size={14} /> Your plan is ready
+                </span>
+                <h3 className="text-[20px] font-bold text-[#0F172A]">Ready to start writing?</h3>
+              </div>
               <button 
                 onClick={() => setShowBuildModal(false)} 
                 className="text-[#64748B] hover:text-[#0F172A] transition-colors"
@@ -346,57 +427,100 @@ export function ShapeClientPage({ workId, initialTitle, initialContext }: Props)
               </button>
             </div>
             
-            <div className="p-6 text-[15px] text-[#475467] leading-relaxed space-y-4">
-              <p>
-                Verba will turn your approved project structure into an editable document.
+            <div className="p-6 text-[15px] text-[#475467] leading-relaxed bg-[#F8FAFC]">
+              <p className="mb-6">
+                Verba has shaped your idea into a working structure. You can keep refining it, or open it as an editable document and start writing.
               </p>
-              <p>
-                Your conversation and Project Context will stay intact. The document will include:
-              </p>
-              <ul className="space-y-2 font-medium text-[#334155]">
-                {title && <li className="flex items-center gap-2"><span className="text-accent">✓</span> Working title</li>}
-                {context.problem && <li className="flex items-center gap-2"><span className="text-accent">✓</span> Problem statement</li>}
-                {context.aim && <li className="flex items-center gap-2"><span className="text-accent">✓</span> Aim</li>}
-                {(context.objectives && context.objectives.length > 0) && <li className="flex items-center gap-2"><span className="text-accent">✓</span> Objectives</li>}
-                {context.scope && <li className="flex items-center gap-2"><span className="text-accent">✓</span> Scope</li>}
-                {context.methodology && <li className="flex items-center gap-2"><span className="text-accent">✓</span> Methodology</li>}
-                <li className="flex items-center gap-2"><span className="text-accent">✓</span> Planned sections</li>
-              </ul>
-              <p className="pt-2 font-semibold text-[#0F172A]">
-                Verba will not write the full project for you.
-              </p>
+
+              {/* Document Preview Card */}
+              <div className="bg-white border border-[#E2E8F0] rounded-lg shadow-sm p-5 mb-4">
+                <div className="text-[12px] font-bold text-[#94A3B8] uppercase tracking-wider mb-2">Your Document</div>
+                <h4 className="text-[16px] font-bold text-[#0F172A] mb-4">
+                  {context.working_title || 'Untitled Work'}
+                </h4>
+
+                {readiness?.direction_summary && (
+                  <div className="mb-3">
+                    <span className="text-[12px] font-bold text-[#64748B] uppercase tracking-wider block mb-1">Direction</span>
+                    <p className="text-[14px] text-[#475467]">{readiness.direction_summary}</p>
+                  </div>
+                )}
+                
+                {readiness?.approach_summary && (
+                  <div className="mb-4">
+                    <span className="text-[12px] font-bold text-[#64748B] uppercase tracking-wider block mb-1">Approach</span>
+                    <p className="text-[14px] text-[#475467]">{readiness.approach_summary}</p>
+                  </div>
+                )}
+
+                {context.planned_sections && context.planned_sections.length > 0 && (
+                  <div>
+                    <span className="text-[12px] font-bold text-[#64748B] uppercase tracking-wider block mb-2">Structure</span>
+                    <ul className="space-y-1.5">
+                      {context.planned_sections.slice(0, 5).map((section: string, idx: number) => (
+                        <li key={idx} className="text-[14px] text-[#0F172A] font-medium flex items-center gap-2">
+                          <span className="text-[#94A3B8] w-5 text-right font-mono text-[12px]">
+                            {String(idx + 1).padStart(2, '0')}
+                          </span> 
+                          {section}
+                        </li>
+                      ))}
+                      {context.planned_sections.length > 5 && (
+                        <li className="text-[13px] text-[#64748B] italic pl-7">
+                          + {context.planned_sections.length - 5} more sections
+                        </li>
+                      )}
+                    </ul>
+                  </div>
+                )}
+              </div>
+
+              {readiness?.missing_optional && readiness.missing_optional.length > 0 && (
+                <div className="mt-4 pt-4 border-t border-[#E2E8F0]">
+                  <span className="text-[12px] font-bold text-[#94A3B8] uppercase tracking-wider block mb-2">Still to decide</span>
+                  <ul className="flex flex-wrap gap-x-4 gap-y-1">
+                    {readiness.missing_optional.slice(0, 3).map((key) => (
+                      <li key={key} className="text-[13px] text-[#64748B] flex items-center gap-1.5">
+                        <Circle size={10} className="text-[#CBD5E1]" />
+                        {CONTEXT_FIELD_CONFIG[key]?.label || key}
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="text-[13px] text-[#94A3B8] mt-2 italic">You can continue shaping these while you write.</p>
+                </div>
+              )}
+
               {buildError && (
-                <div className="bg-red-50 text-red-600 p-3 rounded-md text-[14px]">
+                <div className="bg-red-50 text-red-600 p-3 rounded-md text-[14px] mt-4">
                   {buildError}
                 </div>
               )}
             </div>
             
-            <div className="flex items-center justify-end gap-3 p-6 border-t border-[#E2E8F0] bg-[#F8FAFC]">
-              <button 
-                onClick={() => setShowBuildModal(false)}
-                disabled={isBuilding}
-                className="px-4 py-2 text-[14px] font-medium text-[#475467] hover:text-[#0F172A] transition-colors disabled:opacity-50"
-              >
-                Keep refining
-              </button>
-              <button 
-                onClick={handleBuildDocument}
-                disabled={isBuilding}
-                className="flex items-center gap-2 px-5 py-2.5 bg-accent text-white rounded-md text-[14px] font-medium hover:bg-accent-hover transition-colors disabled:opacity-50 shadow-sm"
-              >
-                {isBuilding ? (
-                  <>
+            <div className="flex items-center justify-between p-6 border-t border-[#E2E8F0] bg-white">
+              <span className="text-[13px] text-[#64748B]">
+                Your conversation and project context will stay connected to this work.
+              </span>
+              <div className="flex gap-3 shrink-0 ml-4">
+                <button 
+                  onClick={() => setShowBuildModal(false)}
+                  disabled={isBuilding}
+                  className="px-4 py-2 text-[14px] font-medium text-[#475467] hover:text-[#0F172A] transition-colors disabled:opacity-50"
+                >
+                  Keep refining
+                </button>
+                <button 
+                  onClick={handleBuildDocument}
+                  disabled={isBuilding}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-accent text-white rounded-md text-[14px] font-medium hover:bg-accent-hover transition-colors disabled:opacity-50 shadow-sm"
+                >
+                  {isBuilding ? (
                     <Loader2 size={16} className="animate-spin" />
-                    Building your document...
-                  </>
-                ) : (
-                  <>
-                    Build my document
-                    <ArrowRight size={16} />
-                  </>
-                )}
-              </button>
+                  ) : null}
+                  Start writing
+                  {!isBuilding && <ArrowRight size={16} />}
+                </button>
+              </div>
             </div>
           </div>
         </div>

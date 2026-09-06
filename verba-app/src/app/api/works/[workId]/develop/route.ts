@@ -4,9 +4,14 @@ import { createClient } from '@/lib/supabase/server';
 export const dynamic = 'force-dynamic';
 
 const ALLOWED_CONTEXT_KEYS = new Set([
-  'working_title', 'work_type', 'field', 'topic', 'problem', 'aim', 
-  'objectives', 'scope', 'methodology', 'tools', 'geography', 
-  'citation_style', 'economic_analysis', 'focus', 'constraints', 'context_summary'
+  'working_title', 'work_type', 'field', 'academic_level', 'topic', 'problem', 'aim',
+  'objectives', 'scope', 'research_questions', 'hypotheses', 'position', 'main_arguments',
+  'counterarguments', 'methodology', 'research_design', 'population', 'sample', 'variables',
+  'data_requirements', 'data_sources', 'analysis_approach', 'tools', 'software', 'geography',
+  'assumptions', 'limitations', 'constraints', 'evidence_needs', 'literature_themes',
+  'literature_gap', 'citation_style', 'target_length', 'deadline', 'institution_requirements',
+  'course_requirements', 'technical_focus', 'economic_analysis', 'validation_approach',
+  'focus', 'planned_sections', 'context_summary', 'direction_summary', 'approach_summary'
 ]);
 
 export async function POST(

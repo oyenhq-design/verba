@@ -102,8 +102,10 @@ Return JSON strictly following this schema:
 Your goal is to help the user shape their rough idea into a structured project context.
 Do not write the final document or essay for them yet. 
 Help them think. Ask one useful question at a time to clarify their intent.
-Challenge overly broad ideas gently (e.g. "That sounds impressive, but might be too broad to finish well. Let's narrow it.").
-Use the current Project Context to inform your response. Do not fabricate research findings, papers, or quotes.
+
+First, understand what kind of work they are doing (e.g. final_year_project, essay, research_paper).
+Then progressively clarify relevant context for that specific work type.
+Do not ask a rigid sequence of questions (like "What is your methodology?"). Instead, let the conversation flow naturally.
 
 Current Project Context:
 {json.dumps(current_context, indent=2)}
@@ -119,25 +121,21 @@ Respond in JSON matching exactly this schema:
   "message": "string (your conversational reply)",
   "suggested_replies": ["string", "string", "string"],
   "context_updates": {{
-    // Only include fields from the Project Context that have been clarified or updated.
-    // Allowed keys: working_title, work_type, field, topic, problem, aim, objectives, scope, methodology, tools, geography, citation_style, economic_analysis, focus, constraints, context_summary
+    // Extract context updates based on the conversation. Only include fields that have been clarified.
+    // If you determine the work type, output it as "work_type" (e.g., "final_year_project", "essay", "research_paper").
+    // As the project becomes clearer, synthesize a concise "direction_summary" and "approach_summary".
+    // Map out proposed sections into "planned_sections" (array of strings) if the user is ready to structure it.
   }},
-  "stage_suggestion": "string (developing, shaping) or null",
-  "readiness": {{
-    "can_plan": boolean,
-    "missing": ["string", "string"] // fields missing before planning can start
-  }}
+  "stage_suggestion": "string (developing, shaping) or null"
 }}"""
 
         formatted_messages = [
             {"role": "system", "content": "You output JSON matching the requested schema exactly. You are Verba, an academic writing assistant."},
         ]
 
-        # Add recent messages for context
         for msg in recent_messages:
             formatted_messages.append({"role": msg.get("role"), "content": msg.get("content")})
 
-        # Add the final prompt
         formatted_messages.append({"role": "user", "content": prompt})
 
         response = self.client.chat.completions.create(
@@ -149,7 +147,20 @@ Respond in JSON matching exactly this schema:
 
         raw = response.choices[0].message.content
         try:
-            return json.loads(raw)
+            parsed = json.loads(raw)
+            
+            # Deterministic readiness calculation
+            from schemas import calculate_readiness
+            
+            # Merge context updates into current context to calculate readiness
+            merged_context = dict(current_context)
+            if "context_updates" in parsed and isinstance(parsed["context_updates"], dict):
+                merged_context.update(parsed["context_updates"])
+            
+            work_type = merged_context.get("work_type", "general_document")
+            parsed["readiness"] = calculate_readiness(work_type, merged_context)
+            
+            return parsed
         except json.JSONDecodeError as exc:
             logger.warning("JSON decode failed in develop_conversation: %s", exc)
             return {
@@ -157,5 +168,17 @@ Respond in JSON matching exactly this schema:
                 "suggested_replies": [],
                 "context_updates": {},
                 "stage_suggestion": None,
-                "readiness": {"can_plan": False, "missing": []}
+                "readiness": {
+                    "is_ready": False,
+                    "work_type": "general_document",
+                    "work_type_label": "General document",
+                    "shaped_count": 0,
+                    "total_relevant": 0,
+                    "missing_core": [],
+                    "missing_optional": [],
+                    "structure_ready": False,
+                    "direction_summary": "",
+                    "approach_summary": ""
+                }
             }
+

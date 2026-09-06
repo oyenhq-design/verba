@@ -234,6 +234,24 @@ async def analyze_alternative(req: AlternativeRequest):
         )
 
 
+class ReadinessRequest(BaseModel):
+    work_type: str | None = None
+    context: Dict[str, Any] = {}
+
+@app.post("/api/readiness")
+async def calculate_readiness_route(req: ReadinessRequest):
+    """Deterministic endpoint to calculate readiness given a work type and context."""
+    from schemas import calculate_readiness
+    try:
+        result = calculate_readiness(req.work_type, req.context)
+        return result
+    except Exception as exc:
+        logger.error("calculate_readiness_route failed: %s", exc)
+        return JSONResponse(
+            status_code=500,
+            content={"error": "READINESS_CALCULATION_FAILED", "message": str(exc)},
+        )
+
 @app.post("/api/develop", response_model=DevelopResponse)
 async def develop_conversation_route(req: DevelopRequest):
     """Conversational development endpoint for shaping an idea."""

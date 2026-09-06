@@ -19,6 +19,8 @@ interface ProjectContext {
   focus?: string | null;
   constraints?: string[];
   context_summary?: string | null;
+  planned_sections?: string[];
+  [key: string]: unknown;
 }
 
 type TiptapNode = {
@@ -114,19 +116,23 @@ export async function POST(
     addParagraph();
 
     // Build the structure based on context
-    const typeStr = (context.work_type || '').toLowerCase();
-    
     let mainSections: string[] = [];
-    if (typeStr.includes('final') || typeStr.includes('research project') || typeStr.includes('dissertation')) {
-      mainSections = ['Introduction', 'Literature Review', 'Methodology', 'Results and Discussion', 'Conclusion and Recommendations'];
-    } else if (typeStr.includes('research paper')) {
-      mainSections = ['Abstract', 'Introduction', 'Background / Related Work', 'Methodology', 'Results', 'Discussion', 'Conclusion', 'References'];
-    } else if (typeStr.includes('technical report')) {
-      mainSections = ['Introduction', 'Background', 'Method / Approach', 'Findings / Results', 'Discussion', 'Conclusion', 'Recommendations'];
-    } else if (typeStr.includes('assignment') || typeStr.includes('essay')) {
-      mainSections = ['Introduction', 'Main Discussion', 'Conclusion', 'References'];
+    if (context.planned_sections && Array.isArray(context.planned_sections) && context.planned_sections.length > 0) {
+      mainSections = [...context.planned_sections];
     } else {
-      mainSections = ['Introduction', 'Main Section', 'Conclusion'];
+      const typeStr = (context.work_type || '').toLowerCase();
+      
+      if (typeStr.includes('final') || typeStr.includes('research project') || typeStr.includes('dissertation')) {
+        mainSections = ['Introduction', 'Literature Review', 'Methodology', 'Results and Discussion', 'Conclusion and Recommendations'];
+      } else if (typeStr.includes('research paper')) {
+        mainSections = ['Abstract', 'Introduction', 'Background / Related Work', 'Methodology', 'Results', 'Discussion', 'Conclusion', 'References'];
+      } else if (typeStr.includes('technical report')) {
+        mainSections = ['Introduction', 'Background', 'Method / Approach', 'Findings / Results', 'Discussion', 'Conclusion', 'Recommendations'];
+      } else if (typeStr.includes('assignment') || typeStr.includes('essay')) {
+        mainSections = ['Introduction', 'Main Discussion', 'Conclusion', 'References'];
+      } else {
+        mainSections = ['Introduction', 'Main Section', 'Conclusion'];
+      }
     }
 
     const introIndex = mainSections.findIndex(s => s.toLowerCase().includes('intro')) >= 0 

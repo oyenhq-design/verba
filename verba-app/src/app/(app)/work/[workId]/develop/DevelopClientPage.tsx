@@ -13,6 +13,19 @@ interface Message {
   created_at?: string;
 }
 
+interface Readiness {
+  is_ready: boolean;
+  work_type: string;
+  work_type_label: string;
+  shaped_count: number;
+  total_relevant: number;
+  missing_core: string[];
+  missing_optional: string[];
+  structure_ready: boolean;
+  direction_summary: string;
+  approach_summary: string;
+}
+
 interface Props {
   workId: string;
   initialTitle: string;
@@ -20,16 +33,21 @@ interface Props {
   initialMessages: Message[];
   initialIdea?: string;
   stage?: string;
+  initialReadiness?: Readiness | null;
 }
 
-export function DevelopClientPage({ workId, initialTitle, initialContext, initialMessages, initialIdea, stage }: Props) {
+export function DevelopClientPage({ workId, initialTitle, initialContext, initialMessages, initialIdea, stage, initialReadiness }: Props) {
   const [context, setContext] = useState(initialContext);
   const [title, setTitle] = useState(initialTitle);
+  const [readiness, setReadiness] = useState<Readiness | null>(initialReadiness || null);
   const [showMobileContext, setShowMobileContext] = useState(false);
 
-  const handleContextUpdate = (newContext: Record<string, unknown>, newTitle: string) => {
+  const handleContextUpdate = (newContext: Record<string, unknown>, newTitle: string, newReadiness?: Readiness | null) => {
     setContext(newContext);
     setTitle(newTitle);
+    if (newReadiness) {
+      setReadiness(newReadiness);
+    }
   };
 
   const router = useRouter();
@@ -72,7 +90,7 @@ export function DevelopClientPage({ workId, initialTitle, initialContext, initia
         </div>
 
         <div className="flex-1 overflow-y-auto bg-white">
-          <ProjectContextPanel context={context} initialIdea={initialIdea} onContinue={() => router.push(`/work/${workId}/shape`)} />
+          <ProjectContextPanel context={context} initialIdea={initialIdea} readiness={readiness} onContinue={() => router.push(`/work/${workId}/shape`)} />
         </div>
       </div>
 

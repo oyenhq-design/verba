@@ -10,12 +10,25 @@ interface Message {
   created_at?: string;
 }
 
+interface Readiness {
+  is_ready: boolean;
+  work_type: string;
+  work_type_label: string;
+  shaped_count: number;
+  total_relevant: number;
+  missing_core: string[];
+  missing_optional: string[];
+  structure_ready: boolean;
+  direction_summary: string;
+  approach_summary: string;
+}
+
 interface Props {
   workId: string;
   initialMessages: Message[];
   initialTitle: string;
   stage?: string;
-  onContextUpdate: (newContext: Record<string, unknown>, newTitle: string) => void;
+  onContextUpdate: (newContext: Record<string, unknown>, newTitle: string, readiness?: Readiness | null) => void;
 }
 
 export function DevelopChat({ workId, initialMessages, initialTitle, stage, onContextUpdate }: Props) {
@@ -83,7 +96,7 @@ export function DevelopChat({ workId, initialMessages, initialTitle, stage, onCo
       }
 
       if (data.context) {
-        onContextUpdate(data.context, data.title || initialTitle);
+        onContextUpdate(data.context, data.title || initialTitle, data.readiness);
       }
       
     } catch (err) {
@@ -131,7 +144,7 @@ export function DevelopChat({ workId, initialMessages, initialTitle, stage, onCo
       }
 
       if (data.context) {
-        onContextUpdate(data.context, data.title || initialTitle);
+        onContextUpdate(data.context, data.title || initialTitle, data.readiness);
       }
       
     } catch (err) {

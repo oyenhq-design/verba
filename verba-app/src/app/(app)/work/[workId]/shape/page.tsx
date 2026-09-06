@@ -23,11 +23,34 @@ export default async function ShapePage({ params }: { params: { workId: string }
     notFound();
   }
 
+  // Fetch readiness from engine
+  let initialReadiness = null;
+  const engineUrl = process.env.VERBA_ENGINE_URL;
+  if (engineUrl && work.context) {
+    try {
+      const res = await fetch(`${engineUrl}/api/readiness`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          work_type: work.context.work_type || 'general_document',
+          context: work.context
+        }),
+        cache: 'no-store'
+      });
+      if (res.ok) {
+        initialReadiness = await res.json();
+      }
+    } catch (e) {
+      console.error('[ShapePage] Failed to calculate readiness:', e);
+    }
+  }
+
   return (
     <ShapeClientPage 
       workId={work.id}
       initialTitle={work.title}
       initialContext={work.context || {}}
+      initialReadiness={initialReadiness}
     />
   );
 }

@@ -4,9 +4,14 @@ import { createClient } from '@/lib/supabase/server';
 export const dynamic = 'force-dynamic';
 
 const ALLOWED_CONTEXT_KEYS = new Set([
-  'working_title', 'work_type', 'field', 'topic', 'problem', 'aim', 
-  'objectives', 'scope', 'methodology', 'tools', 'geography', 
-  'citation_style', 'economic_analysis', 'focus', 'constraints', 'context_summary'
+  'working_title', 'work_type', 'field', 'academic_level', 'topic', 'problem', 'aim',
+  'objectives', 'scope', 'research_questions', 'hypotheses', 'position', 'main_arguments',
+  'counterarguments', 'methodology', 'research_design', 'population', 'sample', 'variables',
+  'data_requirements', 'data_sources', 'analysis_approach', 'tools', 'software', 'geography',
+  'assumptions', 'limitations', 'constraints', 'evidence_needs', 'literature_themes',
+  'literature_gap', 'citation_style', 'target_length', 'deadline', 'institution_requirements',
+  'course_requirements', 'technical_focus', 'economic_analysis', 'validation_approach',
+  'focus', 'planned_sections', 'context_summary', 'direction_summary', 'approach_summary'
 ]);
 
 export async function PATCH(
@@ -73,10 +78,32 @@ export async function PATCH(
       return NextResponse.json({ error: 'Failed to update context' }, { status: 500 });
     }
 
+    // Call Python engine to calculate readiness deterministically
+    let readiness = null;
+    const engineUrl = process.env.VERBA_ENGINE_URL;
+    if (engineUrl) {
+      try {
+        const res = await fetch(`${engineUrl}/api/readiness`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            work_type: updatedContext.work_type || 'general_document',
+            context: updatedContext
+          })
+        });
+        if (res.ok) {
+          readiness = await res.json();
+        }
+      } catch (e) {
+        console.error('[context API] Failed to calculate readiness:', e);
+      }
+    }
+
     // 4. Return the complete updated state
     return NextResponse.json({
       context: updatedWork.context,
       title: updatedWork.title,
+      readiness
     });
 
   } catch (error: unknown) {

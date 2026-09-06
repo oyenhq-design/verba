@@ -36,6 +36,28 @@ export default async function DevelopPage({ params }: { params: { workId: string
 
   const initialMessages = messages || [];
 
+  // Fetch readiness from engine
+  let initialReadiness = null;
+  const engineUrl = process.env.VERBA_ENGINE_URL;
+  if (engineUrl && work.context) {
+    try {
+      const res = await fetch(`${engineUrl}/api/readiness`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          work_type: work.context.work_type || 'general_document',
+          context: work.context
+        }),
+        cache: 'no-store'
+      });
+      if (res.ok) {
+        initialReadiness = await res.json();
+      }
+    } catch (e) {
+      console.error('[DevelopPage] Failed to calculate readiness:', e);
+    }
+  }
+
   return (
     <DevelopClientPage 
       workId={work.id}
@@ -44,6 +66,7 @@ export default async function DevelopPage({ params }: { params: { workId: string
       initialMessages={initialMessages}
       initialIdea={work.initial_idea}
       stage={work.stage}
+      initialReadiness={initialReadiness}
     />
   );
 }

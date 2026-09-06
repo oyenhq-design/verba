@@ -1,98 +1,92 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import { Lightbulb, CheckCircle2, Circle, ArrowRight } from 'lucide-react';
 
-interface ProjectContext {
-  working_title?: string | null;
-  work_type?: string | null;
-  field?: string | null;
-  topic?: string | null;
-  problem?: string | null;
-  aim?: string | null;
-  objectives?: string[];
-  scope?: string | null;
-  methodology?: string | null;
-  tools?: string[];
-  geography?: string | null;
-  citation_style?: string | null;
-  economic_analysis?: boolean | null;
-  focus?: string | null;
-  constraints?: string[];
-  context_summary?: string | null;
+interface Readiness {
+  is_ready: boolean;
+  work_type: string;
+  work_type_label: string;
+  shaped_count: number;
+  total_relevant: number;
+  missing_core: string[];
+  missing_optional: string[];
+  structure_ready: boolean;
+  direction_summary: string;
+  approach_summary: string;
 }
 
+
 interface Props {
-  context: ProjectContext;
+  context: Record<string, unknown>;
   initialIdea?: string;
+  readiness?: Readiness | null;
   onContinue?: () => void;
 }
 
-const FIELD_LABELS: Record<keyof ProjectContext, string> = {
-  working_title: 'Working title',
-  work_type: 'Work type',
-  field: 'Field',
-  topic: 'Topic',
-  problem: 'Problem',
-  aim: 'Aim',
-  objectives: 'Objectives',
-  scope: 'Scope',
-  methodology: 'Methodology',
-  tools: 'Tools',
-  geography: 'Geography',
-  citation_style: 'Citation style',
-  economic_analysis: 'Economic analysis',
-  focus: 'Focus',
-  constraints: 'Constraints',
-  context_summary: 'Context summary'
+interface FieldConfig {
+  label: string;
+  group: 'Project' | 'Direction' | 'Approach' | 'Requirements' | 'Structure';
+  order: number;
+}
+
+const CONTEXT_FIELD_CONFIG: Record<string, FieldConfig> = {
+  working_title: { label: 'Working title', group: 'Project', order: 1 },
+  work_type: { label: 'Work type', group: 'Project', order: 2 },
+  field: { label: 'Field', group: 'Project', order: 3 },
+  academic_level: { label: 'Academic level', group: 'Project', order: 4 },
+  topic: { label: 'Topic', group: 'Project', order: 5 },
+  
+  problem: { label: 'Problem', group: 'Direction', order: 10 },
+  aim: { label: 'Aim', group: 'Direction', order: 11 },
+  objectives: { label: 'Objectives', group: 'Direction', order: 12 },
+  research_questions: { label: 'Research questions', group: 'Direction', order: 13 },
+  hypotheses: { label: 'Hypotheses', group: 'Direction', order: 14 },
+  position: { label: 'Position', group: 'Direction', order: 15 },
+  main_arguments: { label: 'Main arguments', group: 'Direction', order: 16 },
+  scope: { label: 'Scope', group: 'Direction', order: 17 },
+  focus: { label: 'Focus', group: 'Direction', order: 18 },
+  
+  methodology: { label: 'Methodology', group: 'Approach', order: 20 },
+  research_design: { label: 'Research design', group: 'Approach', order: 21 },
+  population: { label: 'Population', group: 'Approach', order: 22 },
+  sample: { label: 'Sample', group: 'Approach', order: 23 },
+  variables: { label: 'Variables', group: 'Approach', order: 24 },
+  data_requirements: { label: 'Data requirements', group: 'Approach', order: 25 },
+  data_sources: { label: 'Data sources', group: 'Approach', order: 26 },
+  analysis_approach: { label: 'Analysis approach', group: 'Approach', order: 27 },
+  tools: { label: 'Tools', group: 'Approach', order: 28 },
+  software: { label: 'Software', group: 'Approach', order: 29 },
+  geography: { label: 'Geography', group: 'Approach', order: 30 },
+  assumptions: { label: 'Assumptions', group: 'Approach', order: 31 },
+  limitations: { label: 'Limitations', group: 'Approach', order: 32 },
+  constraints: { label: 'Constraints', group: 'Approach', order: 33 },
+  evidence_needs: { label: 'Evidence needs', group: 'Approach', order: 34 },
+  literature_themes: { label: 'Literature themes', group: 'Approach', order: 35 },
+  literature_gap: { label: 'Literature gap', group: 'Approach', order: 36 },
+  technical_focus: { label: 'Technical focus', group: 'Approach', order: 37 },
+  economic_analysis: { label: 'Economic analysis', group: 'Approach', order: 38 },
+  validation_approach: { label: 'Validation approach', group: 'Approach', order: 39 },
+
+  citation_style: { label: 'Citation style', group: 'Requirements', order: 50 },
+  target_length: { label: 'Target length', group: 'Requirements', order: 51 },
+  deadline: { label: 'Deadline', group: 'Requirements', order: 52 },
+  institution_requirements: { label: 'Institution requirements', group: 'Requirements', order: 53 },
+  course_requirements: { label: 'Course requirements', group: 'Requirements', order: 54 },
+  
+  planned_sections: { label: 'Planned sections', group: 'Structure', order: 60 }
 };
 
-const RENDER_ORDER: (keyof ProjectContext)[] = [
-  'working_title',
-  'work_type',
-  'field',
-  'topic',
-  'focus',
-  'problem',
-  'aim',
-  'objectives',
-  'scope',
-  'methodology',
-  'tools',
-  'geography',
-  'constraints'
-];
+const GROUP_ORDER = ['Project', 'Direction', 'Approach', 'Requirements', 'Structure'];
 
-
-export function ProjectContextPanel({ context, initialIdea, onContinue }: Props) {
+export function ProjectContextPanel({ context, initialIdea, readiness, onContinue }: Props) {
   const isDefined = (val: unknown) => {
     if (val === null || val === undefined || val === '') return false;
     if (Array.isArray(val) && val.length === 0) return false;
+    if (typeof val === 'object' && Object.keys(val).length === 0) return false;
     return true;
   };
 
-  const progress = useMemo(() => {
-    let definedCount = 0;
-    
-    // topic or focus counts as 1
-    if (isDefined(context.topic) || isDefined(context.focus)) definedCount++;
-    if (isDefined(context.problem)) definedCount++;
-    if (isDefined(context.aim)) definedCount++;
-    if (isDefined(context.objectives)) definedCount++;
-    if (isDefined(context.scope)) definedCount++;
-    if (isDefined(context.methodology)) definedCount++;
-    if (isDefined(context.tools)) definedCount++;
-    if (isDefined(context.geography)) definedCount++;
-    
-    return {
-      count: definedCount,
-      total: 8
-    };
-  }, [context]);
-
-  const definedKeys = RENDER_ORDER.filter(key => isDefined(context[key]));
-  const undefinedKeys = RENDER_ORDER.filter(key => !isDefined(context[key]));
-
   const renderValue = (value: unknown) => {
-    if (value === null || value === undefined || value === '') {
+    if (!isDefined(value)) {
       return <span className="text-[#94A3B8] italic">Not defined yet</span>;
     }
     if (typeof value === 'boolean') {
@@ -111,6 +105,28 @@ export function ProjectContextPanel({ context, initialIdea, onContinue }: Props)
     return <span className="text-[#101828] whitespace-pre-wrap">{String(value)}</span>;
   };
 
+  // Extract keys that are defined in context
+  const definedKeys = Object.keys(context).filter(k => isDefined(context[k]) && CONTEXT_FIELD_CONFIG[k]);
+  
+  // Sort them by group and order
+  const groupedDefinedKeys: Record<string, string[]> = {};
+  GROUP_ORDER.forEach(g => groupedDefinedKeys[g] = []);
+  
+  definedKeys.forEach(k => {
+    const config = CONTEXT_FIELD_CONFIG[k];
+    groupedDefinedKeys[config.group].push(k);
+  });
+  
+  // Sort inside each group
+  Object.keys(groupedDefinedKeys).forEach(g => {
+    groupedDefinedKeys[g].sort((a, b) => CONTEXT_FIELD_CONFIG[a].order - CONTEXT_FIELD_CONFIG[b].order);
+  });
+
+  const missingToShape = (readiness?.missing_core || []).concat(readiness?.missing_optional || []);
+  const missingWithLabels = missingToShape
+    .filter(k => CONTEXT_FIELD_CONFIG[k])
+    .map(k => CONTEXT_FIELD_CONFIG[k].label);
+
   return (
     <div className="bg-white flex flex-col w-full h-full relative">
       <div className="p-6 pb-5 border-b border-[#E5EAF0] shrink-0 sticky top-0 bg-white/95 backdrop-blur-sm z-10">
@@ -119,10 +135,12 @@ export function ProjectContextPanel({ context, initialIdea, onContinue }: Props)
           Verba organises the key details as your idea takes shape.
         </p>
 
-        {progress.count > 0 && (
-          <div className="mt-4 flex items-center justify-between bg-[#F8FAFC] border border-[#E2E8F0] rounded-full px-4 py-2">
-            <span className="text-[12px] font-semibold text-[#0F172A]">Project context</span>
-            <span className="text-[12px] text-[#64748B] font-medium">{progress.count} of {progress.total} key areas shaped</span>
+        {readiness && (
+          <div className="mt-4 flex flex-col gap-1 bg-[#F8FAFC] border border-[#E2E8F0] rounded-[12px] p-4">
+            <span className="text-[13px] font-semibold text-[#0F172A]">{readiness.work_type_label}</span>
+            <span className="text-[12px] text-[#64748B] font-medium">
+              {readiness.is_ready ? 'Core direction ready' : 'Developing direction'} • {readiness.shaped_count} of {readiness.total_relevant} relevant areas shaped
+            </span>
           </div>
         )}
       </div>
@@ -131,57 +149,66 @@ export function ProjectContextPanel({ context, initialIdea, onContinue }: Props)
         {/* Starting Idea */}
         {initialIdea && (
           <div className="bg-[#F8FAFC] border border-[#E2E8F0] rounded-[12px] p-5 shadow-sm">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2 text-[#0F172A] font-semibold text-[14px]">
-                <Lightbulb size={16} className="text-accent" />
-                <span>Your starting idea</span>
-              </div>
+            <div className="flex items-center gap-2 text-[#0F172A] font-semibold text-[14px] mb-3">
+              <Lightbulb size={16} className="text-accent" />
+              <span>Your starting idea</span>
             </div>
             <p className="text-[14px] text-[#475569] leading-relaxed whitespace-pre-wrap">{initialIdea}</p>
           </div>
         )}
 
-        {/* Progressive Shaping Section */}
-        <div className="space-y-6">
-          <h3 className="text-[15px] font-bold text-[#0F172A] border-b border-[#E2E8F0] pb-2">So far</h3>
-          
-          <div className="space-y-5">
-            {definedKeys.map((key) => (
-              <div key={key} className="group">
-                <div className="flex items-start gap-2">
-                  <CheckCircle2 size={16} className="text-emerald-500 mt-0.5 shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <h4 className="text-[14px] font-semibold text-[#0F172A] mb-1">
-                      {FIELD_LABELS[key]}
-                    </h4>
-                    <div className="text-[14px] text-[#475569] leading-relaxed">
-                      {renderValue(context[key])}
+        {/* Defined Context Fields */}
+        <div className="space-y-8">
+          {GROUP_ORDER.map(group => {
+            const keys = groupedDefinedKeys[group];
+            if (!keys || keys.length === 0) return null;
+            
+            return (
+              <div key={group} className="space-y-4">
+                <h3 className="text-[11px] font-bold text-[#94A3B8] uppercase tracking-wider">{group}</h3>
+                <div className="space-y-5">
+                  {keys.map(key => (
+                    <div key={key} className="flex items-start gap-2">
+                      <CheckCircle2 size={16} className="text-emerald-500 mt-0.5 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <h4 className="text-[14px] font-semibold text-[#0F172A] mb-1">
+                          {CONTEXT_FIELD_CONFIG[key].label}
+                        </h4>
+                        <div className="text-[14px] text-[#475569] leading-relaxed">
+                          {renderValue(context[key])}
+                        </div>
+                      </div>
                     </div>
-                  </div>
+                  ))}
                 </div>
               </div>
-            ))}
-
-            {definedKeys.length > 0 && undefinedKeys.length > 0 && (
-              <div className="h-[1px] bg-[#E2E8F0] my-4" />
-            )}
-
-            {undefinedKeys.map((key) => (
-              <div key={key} className="flex items-center gap-2 opacity-60">
-                <Circle size={16} className="text-[#94A3B8] shrink-0" />
-                <h4 className="text-[14px] font-medium text-[#64748B] flex-1">
-                  {FIELD_LABELS[key]}
-                </h4>
-                <span className="text-[12px] text-[#94A3B8]">Not defined yet</span>
-              </div>
-            ))}
-          </div>
+            );
+          })}
         </div>
 
+        {/* Missing Relevant Fields */}
+        {missingWithLabels.length > 0 && (
+          <div className="pt-6 border-t border-[#E2E8F0]">
+            <h3 className="text-[11px] font-bold text-[#94A3B8] uppercase tracking-wider mb-4">Still to shape</h3>
+            <div className="space-y-3">
+              {missingWithLabels.map(label => (
+                <div key={label} className="flex items-center gap-2 opacity-60">
+                  <Circle size={16} className="text-[#94A3B8] shrink-0" />
+                  <span className="text-[13px] font-medium text-[#64748B] flex-1">
+                    {label}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* CTA */}
-        {progress.count > 0 && onContinue && (
+        {readiness && onContinue && (
           <div className="mt-8 bg-gradient-to-b from-[#F8FAFC] to-white border border-[#E2E8F0] rounded-[12px] p-5 shadow-sm text-center">
-            <p className="text-[14px] font-medium text-[#0F172A] mb-1">Your direction is taking shape.</p>
+            <p className="text-[14px] font-medium text-[#0F172A] mb-1">
+              {readiness.is_ready ? 'Your direction is ready.' : 'Your direction is taking shape.'}
+            </p>
             <p className="text-[13px] text-[#64748B] mb-4">Continue refining, or move to the next step when you&apos;re ready.</p>
             <button 
               onClick={onContinue}
