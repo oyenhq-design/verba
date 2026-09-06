@@ -436,7 +436,7 @@ export function ShapeClientPage({ workId, initialTitle, initialContext, initialR
               <div className="bg-white border border-[#E2E8F0] rounded-lg shadow-sm p-5 mb-4">
                 <div className="text-[12px] font-bold text-[#94A3B8] uppercase tracking-wider mb-2">Your Document</div>
                 <h4 className="text-[16px] font-bold text-[#0F172A] mb-4">
-                  {context.working_title || 'Untitled Work'}
+                  {String(context.working_title || 'Untitled Work')}
                 </h4>
 
                 {readiness?.direction_summary && (
@@ -453,11 +453,11 @@ export function ShapeClientPage({ workId, initialTitle, initialContext, initialR
                   </div>
                 )}
 
-                {context.planned_sections && context.planned_sections.length > 0 && (
+                {Array.isArray(context.planned_sections) && context.planned_sections.length > 0 && (
                   <div>
                     <span className="text-[12px] font-bold text-[#64748B] uppercase tracking-wider block mb-2">Structure</span>
                     <ul className="space-y-1.5">
-                      {context.planned_sections.slice(0, 5).map((section: string, idx: number) => (
+                      {(context.planned_sections as string[]).slice(0, 5).map((section: string, idx: number) => (
                         <li key={idx} className="text-[14px] text-[#0F172A] font-medium flex items-center gap-2">
                           <span className="text-[#94A3B8] w-5 text-right font-mono text-[12px]">
                             {String(idx + 1).padStart(2, '0')}
@@ -465,9 +465,9 @@ export function ShapeClientPage({ workId, initialTitle, initialContext, initialR
                           {section}
                         </li>
                       ))}
-                      {context.planned_sections.length > 5 && (
+                      {(context.planned_sections as string[]).length > 5 && (
                         <li className="text-[13px] text-[#64748B] italic pl-7">
-                          + {context.planned_sections.length - 5} more sections
+                          + {(context.planned_sections as string[]).length - 5} more sections
                         </li>
                       )}
                     </ul>
