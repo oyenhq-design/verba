@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Save, Loader2, ArrowRight, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, Save, Loader2, ArrowRight, Plus, Trash2, X } from 'lucide-react';
 
 interface ProjectContext {
   working_title?: string | null;
@@ -58,6 +58,31 @@ export function ShapeClientPage({ workId, initialTitle, initialContext }: Props)
   const [title, setTitle] = useState(initialTitle);
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
+  const [showBuildModal, setShowBuildModal] = useState(false);
+  const [isBuilding, setIsBuilding] = useState(false);
+  const [buildError, setBuildError] = useState('');
+
+  const handleBuildDocument = async () => {
+    setIsBuilding(true);
+    setBuildError('');
+    try {
+      const res = await fetch(`/api/works/${workId}/build-document`, {
+        method: 'POST',
+      });
+      if (!res.ok) {
+        throw new Error('Failed to prepare the document.');
+      }
+      const data = await res.json();
+      if (data.documentId) {
+        router.push(`/workspace/${data.documentId}`);
+      }
+    } catch (err) {
+      console.error(err);
+      setBuildError("We couldn't prepare the document just now. Your project plan is safe.");
+    } finally {
+      setIsBuilding(false);
+    }
+  };
 
   const handleTextChange = (field: keyof ProjectContext, value: string) => {
     setContext(prev => ({ ...prev, [field]: value }));
@@ -250,11 +275,10 @@ export function ShapeClientPage({ workId, initialTitle, initialContext }: Props)
           </button>
           
           <button 
-            disabled={true} // Not implemented in Phase D
-            className="flex items-center gap-2 px-4 py-2 bg-accent text-white rounded-md text-[14px] font-medium hover:bg-accent-hover transition-colors opacity-50 cursor-not-allowed"
-            title="Continuing to next phase is not implemented yet"
+            onClick={() => setShowBuildModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-accent text-white rounded-md text-[14px] font-medium hover:bg-accent-hover transition-colors"
           >
-            Continue to plan
+            Build my document
             <ArrowRight size={16} />
           </button>
         </div>
@@ -288,8 +312,95 @@ export function ShapeClientPage({ workId, initialTitle, initialContext }: Props)
             ))}
           </div>
           
+          <div className="mt-8 pt-8 border-t border-[#E5EAF0] flex justify-between items-center">
+            <button 
+              onClick={() => router.push(`/work/${workId}/develop`)}
+              className="px-5 py-2.5 bg-white border border-[#E2E8F0] text-[#475467] rounded-md text-[14px] font-medium hover:bg-[#F8FAFC] transition-colors"
+            >
+              Keep developing
+            </button>
+            <button 
+              onClick={() => setShowBuildModal(true)}
+              className="flex items-center gap-2 px-5 py-2.5 bg-accent text-white rounded-md text-[14px] font-medium hover:bg-accent-hover transition-colors shadow-sm"
+            >
+              Build my document
+              <ArrowRight size={16} />
+            </button>
+          </div>
+          
         </div>
       </div>
+
+      {/* Build Modal */}
+      {showBuildModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col">
+            <div className="flex justify-between items-center p-6 border-b border-[#E2E8F0]">
+              <h3 className="text-[18px] font-bold text-[#0F172A]">Ready to start writing?</h3>
+              <button 
+                onClick={() => setShowBuildModal(false)} 
+                className="text-[#64748B] hover:text-[#0F172A] transition-colors"
+                disabled={isBuilding}
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="p-6 text-[15px] text-[#475467] leading-relaxed space-y-4">
+              <p>
+                Verba will turn your approved project structure into an editable document.
+              </p>
+              <p>
+                Your conversation and Project Context will stay intact. The document will include:
+              </p>
+              <ul className="space-y-2 font-medium text-[#334155]">
+                {title && <li className="flex items-center gap-2"><span className="text-accent">✓</span> Working title</li>}
+                {context.problem && <li className="flex items-center gap-2"><span className="text-accent">✓</span> Problem statement</li>}
+                {context.aim && <li className="flex items-center gap-2"><span className="text-accent">✓</span> Aim</li>}
+                {(context.objectives && context.objectives.length > 0) && <li className="flex items-center gap-2"><span className="text-accent">✓</span> Objectives</li>}
+                {context.scope && <li className="flex items-center gap-2"><span className="text-accent">✓</span> Scope</li>}
+                {context.methodology && <li className="flex items-center gap-2"><span className="text-accent">✓</span> Methodology</li>}
+                <li className="flex items-center gap-2"><span className="text-accent">✓</span> Planned sections</li>
+              </ul>
+              <p className="pt-2 font-semibold text-[#0F172A]">
+                Verba will not write the full project for you.
+              </p>
+              {buildError && (
+                <div className="bg-red-50 text-red-600 p-3 rounded-md text-[14px]">
+                  {buildError}
+                </div>
+              )}
+            </div>
+            
+            <div className="flex items-center justify-end gap-3 p-6 border-t border-[#E2E8F0] bg-[#F8FAFC]">
+              <button 
+                onClick={() => setShowBuildModal(false)}
+                disabled={isBuilding}
+                className="px-4 py-2 text-[14px] font-medium text-[#475467] hover:text-[#0F172A] transition-colors disabled:opacity-50"
+              >
+                Keep refining
+              </button>
+              <button 
+                onClick={handleBuildDocument}
+                disabled={isBuilding}
+                className="flex items-center gap-2 px-5 py-2.5 bg-accent text-white rounded-md text-[14px] font-medium hover:bg-accent-hover transition-colors disabled:opacity-50 shadow-sm"
+              >
+                {isBuilding ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" />
+                    Building your document...
+                  </>
+                ) : (
+                  <>
+                    Build my document
+                    <ArrowRight size={16} />
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
