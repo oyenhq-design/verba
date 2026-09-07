@@ -35,11 +35,18 @@ export async function POST(
       return NextResponse.json({ success: false, message: 'Document not found' }, { status: 404 });
     }
 
-    const { data: work } = await supabase
-      .from('works')
-      .select('context')
-      .eq('id', doc.work_id)
-      .single();
+    let projectContext = {};
+    if (doc.work_id) {
+      const { data: work } = await supabase
+        .from('works')
+        .select('context')
+        .eq('id', doc.work_id)
+        .single();
+      
+      if (work?.context) {
+        projectContext = work.context;
+      }
+    }
 
     // 2. Call Verba Engine
     const ENGINE_URL = process.env.VERBA_ENGINE_URL || 'http://localhost:8000';
@@ -47,7 +54,7 @@ export async function POST(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        project_context: work?.context || {},
+        project_context: projectContext,
         surrounding_context: paragraphText,
         selected_text: originalText,
         user_instruction: userInstruction
