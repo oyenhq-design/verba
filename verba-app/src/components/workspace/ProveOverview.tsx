@@ -54,7 +54,7 @@ export function ProveOverview({ wordCount, editorVersion, lastEvent }: Props) {
 
         {/* Last Activity */}
         <div>
-          <div className="text-[13px] font-semibold text-[#0B1628] leading-tight mb-1">{lastActivityDate}</div>
+          <div suppressHydrationWarning className="text-[13px] font-semibold text-[#0B1628] leading-tight mb-1">{lastActivityDate}</div>
           <div className="text-[11px] text-foreground-secondary uppercase tracking-wide">Last activity</div>
           <div className="text-[11px] text-status-success mt-0.5 flex items-center gap-1.5 truncate">
             <span className="w-1.5 h-1.5 bg-status-success rounded-full"></span>

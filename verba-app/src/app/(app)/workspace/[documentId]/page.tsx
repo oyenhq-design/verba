@@ -154,6 +154,23 @@ export default function WorkspacePage({ params }: { params: { documentId: string
         .eq('id', params.documentId)
         .single();
       if (dbError) throw dbError;
+
+      // Legacy Document Adoption
+      if (!docData.work_id) {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: newWorkId, error: adoptError } = await supabase.rpc('adopt_document_into_work', {
+            p_document_id: docData.id,
+            p_user_id: user.id
+          });
+          if (!adoptError && newWorkId) {
+            docData.work_id = newWorkId;
+          } else if (adoptError) {
+            console.error('[loadData] Failed to adopt legacy document:', adoptError);
+          }
+        }
+      }
+
       setDoc(docData);
       versionRef.current = docData.editor_version ?? 0;
       setLiveWordCount(docData.word_count ?? null);

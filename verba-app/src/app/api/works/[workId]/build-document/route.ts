@@ -235,10 +235,14 @@ export async function POST(
       return NextResponse.json({ error: 'Failed to create document' }, { status: 500 });
     }
 
-    // Transition work stage to writing
+    // Transition work stage to writing and set document_id
     await supabase
       .from('works')
-      .update({ stage: 'writing', updated_at: new Date().toISOString() })
+      .update({ 
+        stage: 'writing', 
+        updated_at: new Date().toISOString(),
+        document_id: documentId 
+      })
       .eq('id', workId);
 
     return NextResponse.json({ documentId });

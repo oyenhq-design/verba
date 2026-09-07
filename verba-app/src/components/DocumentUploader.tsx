@@ -89,32 +89,19 @@ export function DocumentUploader() {
         throw new Error(`Storage error: ${storageError.message}`);
       }
 
-      // 2. Insert record into Database
-      const { error: dbError } = await supabase
-        .from('documents')
-        .insert({
-          id: documentId,
-          user_id: userId,
-          title: file.name.replace('.docx', ''),
-          original_filename: file.name,
-          mime_type: file.type,
-          file_size: file.size,
-          storage_path: storagePath,
-          status: 'uploaded'
-        })
-        .select()
-        .single();
-
-      if (dbError) {
-        throw new Error(`Database error: ${dbError.message}`);
-      }
-
-      // 3. Trigger API processing route
+      // 2. Trigger API processing route
       setStatus('processing');
       const response = await fetch('/api/process', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ documentId: documentId })
+        body: JSON.stringify({ 
+          documentId,
+          title: file.name.replace('.docx', ''),
+          originalFilename: file.name,
+          mimeType: file.type,
+          fileSize: file.size,
+          storagePath
+        })
       });
 
       if (!response.ok) {

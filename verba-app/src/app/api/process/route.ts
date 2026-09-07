@@ -9,10 +9,10 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    documentId = body.documentId || null;
+    const { documentId, title, originalFilename, mimeType, fileSize, storagePath } = body;
 
-    if (!documentId) {
-      return NextResponse.json({ error: 'Missing documentId' }, { status: 400 });
+    if (!documentId || !storagePath) {
+      return NextResponse.json({ error: 'Missing document parameters' }, { status: 400 });
     }
 
     // 1. Authenticate
@@ -21,56 +21,21 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // 2. Verify ownership — fetch document scoped by BOTH id AND user_id.
-    //    A malicious authenticated user who supplies another user's documentId
-    //    will get a 404 here because user_id will not match.
-    const { data: docData, error: docError } = await supabase
-      .from('documents')
-      .select('id, user_id, storage_path')
-      .eq('id', documentId)
-      .eq('user_id', user.id)   // ownership check — never trust user_id from body
-      .single();
-
-    if (docError || !docData) {
-      return NextResponse.json({ error: 'Document not found or unauthorized' }, { status: 404 });
+    // 2. Verify storage path belongs to user
+    if (!storagePath.startsWith(`${user.id}/`)) {
+      return NextResponse.json({ error: 'Unauthorized storage path' }, { status: 403 });
     }
 
-    // 3. Mark as processing
-    await supabase
-      .from('documents')
-      .update({ status: 'processing' })
-      .eq('id', documentId)
-      .eq('user_id', user.id);
-
-    // 4. Download from Supabase Storage
+    // 3. Download from Supabase Storage
     const { data: fileData, error: downloadError } = await supabase.storage
       .from('documents')
-      .download(docData.storage_path);
+      .download(storagePath);
 
     if (downloadError || !fileData) {
       throw new Error(`Failed to download file from storage: ${downloadError?.message}`);
     }
 
-    // 4b. Log document_uploaded provenance event
-    // Try to get file size directly from storage metadata, or fallback to Blob size
-    const fileSizeBytes = fileData.size || 0;
-    const { error: eventError } = await supabase
-      .from('document_events')
-      .insert({
-        document_id: documentId,
-        user_id: user.id,
-        event_type: 'document_uploaded',
-        metadata: {
-          file_type: 'docx',
-          file_size_bytes: fileSizeBytes
-        }
-      });
-      
-    if (eventError) {
-      console.error('[process] Non-critical failure logging document_uploaded:', eventError.message);
-    }
-
-    // 5. Send to Python FastAPI Engine
+    // 4. Send to Python FastAPI Engine
     const formData = new FormData();
     formData.append('file', fileData, 'document.docx');
 
@@ -97,7 +62,7 @@ export async function POST(request: Request) {
 
     const parsedJson = await engineResponse.json();
 
-    // 6. Calculate word count deterministically from parsed blocks
+    // 5. Calculate word count deterministically from parsed blocks
     let wordCount = 0;
     if (parsedJson.sections) {
       parsedJson.sections.forEach((section: { blocks?: { text?: string }[] }) => {
@@ -110,23 +75,39 @@ export async function POST(request: Request) {
       });
     }
 
-    // 7. Save parsed content and mark as ready.
-    //    Do NOT touch editor_state — the original parsed_content is the
-    //    authoritative source until the user first saves an edited version.
-    const { error: updateError } = await supabase
-      .from('documents')
-      .update({
-        status: 'ready',
-        parsed_content: parsedJson,
-        word_count: wordCount,
-        // Ensure editor_state is not set here — it stays NULL until the
-        // user edits and autosave fires.
-      })
-      .eq('id', documentId)
-      .eq('user_id', user.id);
+    // 6. Atomically Create Work and Document via RPC
+    const { error: rpcError } = await supabase.rpc('create_uploaded_work_document', {
+      p_document_id: documentId,
+      p_user_id: user.id,
+      p_title: title,
+      p_original_filename: originalFilename,
+      p_mime_type: mimeType,
+      p_file_size: fileSize,
+      p_storage_path: storagePath,
+      p_parsed_content: parsedJson,
+      p_word_count: wordCount
+    });
 
-    if (updateError) {
-      throw new Error(`Failed to update parsed content: ${updateError.message}`);
+    if (rpcError) {
+      throw new Error(`Failed to create work and document: ${rpcError.message}`);
+    }
+
+    // 7. Log document_uploaded provenance event
+    const fileSizeBytes = fileData.size || 0;
+    const { error: eventError } = await supabase
+      .from('document_events')
+      .insert({
+        document_id: documentId,
+        user_id: user.id,
+        event_type: 'document_uploaded',
+        metadata: {
+          file_type: 'docx',
+          file_size_bytes: fileSizeBytes
+        }
+      });
+      
+    if (eventError) {
+      console.error('[process] Non-critical failure logging document_uploaded:', eventError.message);
     }
 
     return NextResponse.json({ success: true, documentId });
@@ -134,7 +115,9 @@ export async function POST(request: Request) {
   } catch (error: unknown) {
     console.error('[process] Error:', error instanceof Error ? error.message : error);
 
-    // Attempt to mark the document as failed (scoped by user_id for safety)
+    // If it failed and we already created the DB row, we'd update status to failed.
+    // However, we now only create the DB row on success. If it fails midway, no DB row exists yet.
+    // We can still try to mark as failed *if* it somehow exists, but generally it won't.
     if (documentId) {
       const { data: { user } } = await supabase.auth.getUser().catch(() => ({ data: { user: null } }));
       if (user) {

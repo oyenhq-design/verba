@@ -1,6 +1,5 @@
-import { createClient } from '@supabase/supabase-js';
-import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
+import { createClient } from '@/lib/supabase/server';
 import { SourceSchema, normalizeDoi } from '@/lib/sources/normalize';
 
 export async function GET(
@@ -8,21 +7,21 @@ export async function GET(
   { params }: { params: { workId: string } }
 ) {
   try {
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        global: {
-          headers: {
-            Authorization: `Bearer ${cookies().get('sb-access-token')?.value || ''}`,
-          },
-        },
-      }
-    );
-
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
+    const supabase = createClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { data: work, error: workError } = await supabase
+      .from('works')
+      .select('id')
+      .eq('id', params.workId)
+      .eq('user_id', user.id)
+      .single();
+
+    if (workError || !work) {
+      return NextResponse.json({ error: 'Work not found' }, { status: 404 });
     }
 
     const { data: sources, error } = await supabase
@@ -46,21 +45,21 @@ export async function POST(
   { params }: { params: { workId: string } }
 ) {
   try {
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        global: {
-          headers: {
-            Authorization: `Bearer ${cookies().get('sb-access-token')?.value || ''}`,
-          },
-        },
-      }
-    );
-
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
+    const supabase = createClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { data: work, error: workError } = await supabase
+      .from('works')
+      .select('id')
+      .eq('id', params.workId)
+      .eq('user_id', user.id)
+      .single();
+
+    if (workError || !work) {
+      return NextResponse.json({ error: 'Work not found' }, { status: 404 });
     }
 
     const body = await request.json();

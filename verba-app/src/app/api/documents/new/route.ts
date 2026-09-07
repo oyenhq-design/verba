@@ -14,8 +14,6 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { type, idea } = body;
 
-    const documentId = crypto.randomUUID();
-
     // Editor invariant initialization
     // For both 'blank' and 'idea', we want a valid Tiptap state.
     // If 'idea', we put the idea text as the first paragraph.
@@ -45,26 +43,15 @@ export async function POST(req: Request) {
       ]
     };
 
-    const newDocument = {
-      id: documentId,
-      user_id: user.id,
-      title: type === 'idea' ? 'Untitled Idea' : 'Untitled Document',
-      original_filename: '',
-      mime_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      file_size: 0,
-      storage_path: '',
-      status: 'ready',
-      word_count: type === 'idea' && idea ? idea.split(/\s+/).length : 0,
-      editor_version: 1,
-      editor_state: editorState,
-      parsed_content: parsedContent
-    };
+    const { data: documentId, error: dbError } = await supabase
+      .rpc('create_blank_work_document', {
+        p_user_id: user.id,
+        p_title: type === 'idea' ? 'Untitled Idea' : 'Untitled Document',
+        p_editor_state: editorState,
+        p_parsed_content: parsedContent
+      });
 
-    const { error: dbError } = await supabase
-      .from('documents')
-      .insert(newDocument);
-
-    if (dbError) {
+    if (dbError || !documentId) {
       console.error('Database insertion error:', dbError);
       return NextResponse.json({ error: 'Failed to create document' }, { status: 500 });
     }

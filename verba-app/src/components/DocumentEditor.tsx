@@ -4,7 +4,6 @@ import React, { useEffect, useState } from 'react';
 import { useEditor, EditorContent, Editor } from '@tiptap/react';
 import { BubbleMenu } from '@tiptap/react/menus';
 import StarterKit from '@tiptap/starter-kit';
-import Underline from '@tiptap/extension-underline';
 import TextAlign from '@tiptap/extension-text-align';
 import { EditorToolbar } from './EditorToolbar';
 import { VerbaBlockId, IssueHighlight, IssueProp } from './editor/EditorExtensions';
@@ -104,7 +103,6 @@ export function DocumentEditor({
       StarterKit.configure({
         heading: { levels: [1, 2, 3, 4, 5, 6] },
       }),
-      Underline,
       TextAlign.configure({ types: ['heading', 'paragraph'] }),
       VerbaBlockId,
       IssueHighlight.configure({

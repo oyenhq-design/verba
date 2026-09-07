@@ -71,7 +71,7 @@ export function WritingHistory({ events, loading }: Props) {
   return (
     <div className="flex-1 overflow-y-auto bg-[#F9FAFB] p-4 relative">
       <div className="flex items-center justify-between mb-4">
-        <h4 className="text-[12px] font-semibold text-[#0B1628]">Today — {new Date().toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' })}</h4>
+        <h4 suppressHydrationWarning className="text-[12px] font-semibold text-[#0B1628]">Today — {new Date().toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' })}</h4>
         <button className="text-[12px] text-accent font-medium flex items-center hover:underline">
           Filter <span className="ml-1 text-[8px]">▼</span>
         </button>
