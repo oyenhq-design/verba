@@ -8,6 +8,7 @@ import Underline from '@tiptap/extension-underline';
 import TextAlign from '@tiptap/extension-text-align';
 import { EditorToolbar } from './EditorToolbar';
 import { VerbaBlockId, IssueHighlight, IssueProp } from './editor/EditorExtensions';
+import { Citation } from './editor/extensions/Citation';
 import { Sparkles } from 'lucide-react';
 
 export interface ContextualSelection {
@@ -46,6 +47,8 @@ interface DocumentEditorProps {
   /** Called with the latest Tiptap JSON whenever the document changes (for autosave) */
   onUpdate?: (json: TiptapJson) => void;
   onAskVerba?: (selection: ContextualSelection) => void;
+  onFocus?: () => void;
+  onBlur?: () => void;
 }
 
 /**
@@ -91,6 +94,8 @@ export function DocumentEditor({
   onEditorReady,
   onUpdate,
   onAskVerba,
+  onFocus,
+  onBlur,
 }: DocumentEditorProps) {
   const [mounted, setMounted] = useState(false);
 
@@ -107,6 +112,7 @@ export function DocumentEditor({
         selectedIssueId,
         onIssueSelect,
       }),
+      Citation,
     ],
     content: '',
     editable: isEditable,
@@ -146,6 +152,15 @@ export function DocumentEditor({
       if (onUpdate) {
         onUpdate(e.getJSON());
       }
+    },
+    onFocus: () => {
+      if (onFocus) onFocus();
+    },
+    onBlur: () => {
+      // Small delay to allow clicking on CiteTab buttons without instantly disabling them
+      setTimeout(() => {
+        if (onBlur) onBlur();
+      }, 200);
     },
   });
 

@@ -10,6 +10,8 @@ import {
 import { VerbaWorkspace } from '@/components/workspace/VerbaWorkspace';
 import { DocumentEditor, ContextualSelection } from '@/components/DocumentEditor';
 import { Editor } from '@tiptap/react';
+import { CitationProvider } from '@/components/workspace/CitationContext';
+import { BibliographyPreview } from '@/components/workspace/BibliographyPreview';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -31,6 +33,7 @@ interface DocumentData {
   parsed_content: { sections: { blocks: Block[] }[] };
   editor_state: Record<string, unknown> | null;
   editor_version: number;
+  work_id: string | null;
 }
 
 interface Suggestion {
@@ -74,6 +77,21 @@ function countWordsFromTiptapJson(json: Record<string, any>): number {
   return count;
 }
 
+function extractCitationsFromTiptapJson(json: Record<string, unknown> | null): { citationId: string; sourceId: string }[] {
+  if (!json) return [];
+  const citations: { citationId: string; sourceId: string }[] = [];
+  const walk = (node: Record<string, any>) => {
+    if (node.type === 'citation' && node.attrs?.citationId && node.attrs?.sourceId) {
+      citations.push({ citationId: node.attrs.citationId, sourceId: node.attrs.sourceId });
+    }
+    if (Array.isArray(node.content)) {
+      node.content.forEach((child: Record<string, any>) => walk(child));
+    }
+  };
+  walk(json);
+  return citations;
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function WorkspacePage({ params }: { params: { documentId: string } }) {
@@ -88,8 +106,16 @@ export default function WorkspacePage({ params }: { params: { documentId: string
   // Contextual Assistant
   const [contextualSelection, setContextualSelection] = useState<ContextualSelection | null>(null);
 
+  // Citation Data
+  const [sources, setSources] = useState<any[]>([]);
+  const [citationStyle, setCitationStyle] = useState<'apa' | 'ieee'>('apa');
+  const [documentCitations, setDocumentCitations] = useState<{ citationId: string; sourceId: string }[]>([]);
+
   // Live word count (updated on every save)
   const [liveWordCount, setLiveWordCount] = useState<number | null>(null);
+
+  // Editor Focus State for Citation insertion
+  const [editorHasFocus, setEditorHasFocus] = useState(false);
 
   // Autosave preference — null = still loading (prevents premature autosave)
   const [autosaveEnabled, setAutosaveEnabled] = useState<boolean | null>(null);
@@ -131,6 +157,9 @@ export default function WorkspacePage({ params }: { params: { documentId: string
       setDoc(docData);
       versionRef.current = docData.editor_version ?? 0;
       setLiveWordCount(docData.word_count ?? null);
+      if (docData.editor_state) {
+        setDocumentCitations(extractCitationsFromTiptapJson(docData.editor_state as any));
+      }
 
       const { data: issuesData, error: issuesError } = await supabase
         .from('writing_issues')
@@ -140,6 +169,31 @@ export default function WorkspacePage({ params }: { params: { documentId: string
       if (!issuesError && issuesData) {
         setIssues(issuesData);
         if (issuesData.length > 0) setIsWorkspaceOpen(true);
+      }
+
+      // Fetch Citation Data if connected to a Work
+      if (docData.work_id) {
+        // Fetch Work to get citation_style from context
+        const { data: workData } = await supabase
+          .from('works')
+          .select('context')
+          .eq('id', docData.work_id)
+          .single();
+        
+        if (workData?.context?.citation_style) {
+          setCitationStyle(workData.context.citation_style);
+        }
+
+        // Fetch Work Sources
+        const { data: sourcesData } = await supabase
+          .from('work_sources')
+          .select('*')
+          .eq('work_id', docData.work_id)
+          .order('created_at', { ascending: false });
+        
+        if (sourcesData) {
+          setSources(sourcesData);
+        }
       }
     } catch (err: unknown) {
       console.error('[loadData]', err);
@@ -283,6 +337,7 @@ export default function WorkspacePage({ params }: { params: { documentId: string
   const handleEditorUpdate = useCallback((json: Record<string, unknown>) => {
     // Mark dirty immediately
     setSaveStatus('unsaved');
+    setDocumentCitations(extractCitationsFromTiptapJson(json));
 
     // Do not schedule autosave until preference is loaded or if it's off
     if (autosaveEnabledRef.current !== true) return;
@@ -597,7 +652,6 @@ export default function WorkspacePage({ params }: { params: { documentId: string
                   ? <Loader2 size={13} className="animate-spin" />
                   : <Save size={13} />
                 }
-                {saveStatus === 'saving' ? 'Saving…' : 'Save'}
               </button>
             )}
 
@@ -657,22 +711,29 @@ export default function WorkspacePage({ params }: { params: { documentId: string
           </div>
         </header>
 
-        <DocumentEditor
-          initialBlocks={initialEditorJson ? undefined : initialBlocks}
-          initialEditorJson={initialEditorJson}
-          isEditable={true}
-          zoomLevel={zoomLevel}
-          issues={issues}
-          selectedIssueId={activeIssueId}
-          onIssueSelect={selectIssue}
-          onEditorReady={(editor) => { editorRef.current = editor; }}
-          onUpdate={handleEditorUpdate}
-          onAskVerba={(sel) => {
-            setContextualSelection(sel);
-            setIsWorkspaceOpen(true);
-            setActiveIssueId(null);
-          }}
-        />
+        <CitationProvider sources={sources} style={citationStyle} documentCitations={documentCitations}>
+          <div className="flex-1 overflow-y-auto">
+            <DocumentEditor
+              initialBlocks={initialEditorJson ? undefined : initialBlocks}
+              initialEditorJson={initialEditorJson}
+              isEditable={true}
+              zoomLevel={zoomLevel}
+              issues={issues}
+              selectedIssueId={activeIssueId}
+              onIssueSelect={selectIssue}
+              onEditorReady={(editor) => { editorRef.current = editor; }}
+              onUpdate={handleEditorUpdate}
+              onFocus={() => setEditorHasFocus(true)}
+              onBlur={() => setEditorHasFocus(false)}
+              onAskVerba={(sel) => {
+                setContextualSelection(sel);
+                setIsWorkspaceOpen(true);
+                setActiveIssueId(null);
+              }}
+            />
+            <BibliographyPreview />
+          </div>
+        </CitationProvider>
       </div>
 
       {/* 4. Right Panel: Verba Workspace */}
@@ -704,6 +765,49 @@ export default function WorkspacePage({ params }: { params: { documentId: string
           onIssueCreated={async (issueId) => {
             await loadData();
             selectIssue(issueId);
+          }}
+          workId={doc.work_id || null}
+          editorHasFocus={editorHasFocus}
+          onInsertCitation={async (sourceId) => {
+            if (!editorRef.current) return;
+            const editor = editorRef.current;
+            try {
+              const res = await fetch(`/api/documents/${params.documentId}/citations`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ work_source_id: sourceId })
+              });
+              
+              if (!res.ok) {
+                const data = await res.json();
+                throw new Error(data.message || 'Failed to insert citation');
+              }
+              
+              const { citationId } = await res.json();
+              
+              const { from, to } = editor.state.selection;
+              editor.commands.insertContentAt(to, {
+                type: 'citation',
+                attrs: { citationId, sourceId }
+              });
+              
+              editor.commands.insertContentAt(to + 1, ' ');
+              
+              fetch(`/api/documents/${params.documentId}/events`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  event_type: 'citation_inserted',
+                  metadata: {
+                    citation_id: citationId,
+                    source_id: sourceId
+                  }
+                })
+              }).catch(err => console.error('Failed to log citation_inserted event:', err));
+              
+            } catch (err: any) {
+              alert(err.message);
+            }
           }}
         />
       )}

@@ -89,6 +89,63 @@ export async function POST(
 
     const newVersion = docData.editor_version + 1;
 
+    // 4.5. Reconcile Citations (Phase G)
+    try {
+      // Extract active citationIds from the saved editor state
+      const activeCitations = new Set<string>();
+      const walk = (node: any) => {
+        if (node?.type === 'citation' && node?.attrs?.citationId) {
+          activeCitations.add(node.attrs.citationId);
+        }
+        if (Array.isArray(node?.content)) {
+          node.content.forEach(walk);
+        }
+      };
+      walk(editorState);
+
+      // Fetch all persisted citations for this document
+      const { data: dbCitations, error: citError } = await supabase
+        .from('document_citations')
+        .select('id, work_source_id')
+        .eq('document_id', params.id);
+
+      if (!citError && dbCitations) {
+        const dbCitationIds = new Set(dbCitations.map(c => c.id));
+        const removedCitationIds = dbCitations.filter(c => !activeCitations.has(c.id));
+
+        if (removedCitationIds.length > 0) {
+          const removedIds = removedCitationIds.map(c => c.id);
+          
+          // Delete them from DB
+          const { error: delError } = await supabase
+            .from('document_citations')
+            .delete()
+            .in('id', removedIds);
+            
+          if (!delError) {
+            // Emit PROVE event for each removed citation
+            const events = removedCitationIds.map(c => ({
+              document_id: params.id,
+              user_id: user.id,
+              event_type: 'citation_removed',
+              metadata: {
+                citation_id: c.id,
+                source_id: c.work_source_id
+              }
+            }));
+            
+            if (events.length > 0) {
+              await supabase.from('document_events').insert(events);
+            }
+          } else {
+            console.error('[save] Failed to delete orphaned citations:', delError.message);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('[save] Citation reconciliation error (non-fatal):', err);
+    }
+
     // 5. Checkpoint handling
     if (saveType === 'manual_save' || saveType === 'autosave_checkpoint') {
       try {
