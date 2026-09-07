@@ -182,3 +182,45 @@ Respond in JSON matching exactly this schema:
                 }
             }
 
+    def generate_contextual_edit(self, project_context: dict, surrounding_context: str, selected_text: str, user_instruction: str) -> dict:
+        prompt = f"""You are an expert writing refinement assistant. Your task is to apply a specific user instruction to a selected text, maintaining the context of the surrounding paragraph.
+
+Overall Project Context:
+{json.dumps(project_context, indent=2)}
+
+Surrounding Paragraph Context:
+{surrounding_context}
+
+Selected Text to Edit:
+{selected_text}
+
+User Instruction:
+{user_instruction}
+
+Provide a *new* suggested_text that replaces the Selected Text according to the User Instruction. Ensure it flows well within the Surrounding Paragraph Context.
+
+Return JSON strictly following this schema:
+{{
+  "message": "string (optional conversational message)",
+  "suggested_text": "string (the improved alternative for the exact selected text)",
+  "explanation": "string (brief explanation of how the instruction was applied)",
+  "action_type": "string (optional action type category)"
+}}"""
+
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=[
+                {"role": "system", "content": "You output JSON matching the requested schema exactly."},
+                {"role": "user", "content": prompt},
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.7,
+        )
+
+        raw = response.choices[0].message.content
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError as exc:
+            logger.warning("JSON decode failed in generate_contextual_edit: %s", exc)
+            return {"suggested_text": selected_text, "explanation": "Failed to generate edit."}
+

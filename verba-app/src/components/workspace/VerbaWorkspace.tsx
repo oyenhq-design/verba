@@ -6,6 +6,7 @@ import { ReviewTab } from './ReviewTab';
 import { ProvePanel } from './ProvePanel';
 import { WritingAssistant, Issue } from '../WritingAssistant';
 import { PanelRightClose } from 'lucide-react';
+import { ContextualSelection } from '../DocumentEditor';
 
 interface Props {
   documentId: string;
@@ -15,6 +16,8 @@ interface Props {
   paragraphText: string;
   issues?: Issue[];
   issue: Issue | null;
+  contextualSelection?: ContextualSelection | null;
+  onClearContextualSelection?: () => void;
   onIssueSelect?: (id: string | null) => void;
   onSuggestionAction: (issueId: string, suggestionId: string, action: 'accepted' | 'rejected' | 'manually_edited', newText?: string) => void;
   onCloseIssue: () => void;
@@ -25,6 +28,7 @@ interface Props {
   issuesCount: number;
   docStatus: string;
   analyzeError: string | null;
+  onIssueCreated?: (issueId: string) => void;
 }
 
 export function VerbaWorkspace({
@@ -34,6 +38,8 @@ export function VerbaWorkspace({
   paragraphText,
   issues = [],
   issue,
+  contextualSelection,
+  onClearContextualSelection,
   onIssueSelect,
   onSuggestionAction,
   onCloseIssue,
@@ -43,6 +49,7 @@ export function VerbaWorkspace({
   issuesCount,
   docStatus,
   analyzeError,
+  onIssueCreated,
 }: Props) {
   const [activeTab, setActiveTab] = useState<WorkspaceTab>('assistant');
 
@@ -75,6 +82,8 @@ export function VerbaWorkspace({
             paragraphText={paragraphText}
             issues={issues}
             issue={issue}
+            contextualSelection={contextualSelection}
+            onClearContextualSelection={onClearContextualSelection}
             onIssueSelect={onIssueSelect}
             onClose={onCloseIssue}
             onSuggestionAction={onSuggestionAction}
@@ -84,6 +93,7 @@ export function VerbaWorkspace({
             issuesCount={issuesCount}
             docStatus={docStatus}
             analyzeError={analyzeError}
+            onIssueCreated={onIssueCreated}
           />
         )}
         {activeTab === 'review' && (

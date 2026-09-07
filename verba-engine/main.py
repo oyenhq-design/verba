@@ -234,6 +234,62 @@ async def analyze_alternative(req: AlternativeRequest):
         )
 
 
+class ContextualEditRequest(BaseModel):
+    selected_text: str
+    surrounding_context: str
+    user_instruction: str
+    project_context: Dict[str, Any] = {}
+    work_id: str | None = None
+    document_id: str | None = None
+
+@app.post("/api/contextual-edit")
+async def contextual_edit_route(req: ContextualEditRequest):
+    """Generates an edit based on a user instruction."""
+    try:
+        result = provider.generate_contextual_edit(
+            project_context=req.project_context,
+            surrounding_context=req.surrounding_context,
+            selected_text=req.selected_text,
+            user_instruction=req.user_instruction
+        )
+
+        original = req.selected_text
+        suggested = result.get("suggested_text", "")
+
+        if not original or not suggested:
+            return JSONResponse(
+                status_code=400,
+                content={"error": "MISSING_FIELDS", "message": "Missing original or suggested text."},
+            )
+
+        if not SafetyValidator.validate_suggestion(original, suggested):
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "error": "SAFETY_VALIDATION_FAILED",
+                    "message": "Generated edit failed safety validation.",
+                },
+            )
+
+        return result
+
+    except Exception as exc:
+        logger.error(
+            "contextual_edit failed: %s — %s",
+            type(exc).__name__,
+            str(exc),
+            extra={"exception_type": type(exc).__name__},
+        )
+        logger.debug("Full traceback:\n%s", traceback.format_exc())
+        return JSONResponse(
+            status_code=500,
+            content={
+                "error": "CONTEXTUAL_EDIT_FAILED",
+                "message": "Unable to generate contextual edit.",
+            },
+        )
+
+
 class ReadinessRequest(BaseModel):
     work_type: str | None = None
     context: Dict[str, Any] = {}

@@ -2,11 +2,21 @@
 
 import React, { useEffect, useState } from 'react';
 import { useEditor, EditorContent, Editor } from '@tiptap/react';
+import { BubbleMenu } from '@tiptap/react/menus';
 import StarterKit from '@tiptap/starter-kit';
 import Underline from '@tiptap/extension-underline';
 import TextAlign from '@tiptap/extension-text-align';
 import { EditorToolbar } from './EditorToolbar';
 import { VerbaBlockId, IssueHighlight, IssueProp } from './editor/EditorExtensions';
+import { Sparkles } from 'lucide-react';
+
+export interface ContextualSelection {
+  blockId: string;
+  paragraphText: string;
+  originalText: string;
+  startOffset: number;
+  endOffset: number;
+}
 
 /** A parsed block from docx_processor / parsed_content */
 interface Block {
@@ -35,6 +45,7 @@ interface DocumentEditorProps {
   onEditorReady?: (editor: Editor) => void;
   /** Called with the latest Tiptap JSON whenever the document changes (for autosave) */
   onUpdate?: (json: TiptapJson) => void;
+  onAskVerba?: (selection: ContextualSelection) => void;
 }
 
 /**
@@ -79,6 +90,7 @@ export function DocumentEditor({
   onIssueSelect = () => {},
   onEditorReady,
   onUpdate,
+  onAskVerba,
 }: DocumentEditorProps) {
   const [mounted, setMounted] = useState(false);
 
@@ -200,6 +212,51 @@ export function DocumentEditor({
             marginBottom: scale < 1 ? `-${a4MinHeight * (1 - scale)}px` : '32px',
           }}
         >
+          {editor && (
+            <BubbleMenu 
+              editor={editor}
+              shouldShow={({ editor, from, to }) => {
+                return from !== to && !editor.isActive('image');
+              }}
+            >
+              <button
+                onClick={() => {
+                  const { from, to } = editor.state.selection;
+                  const text = editor.state.doc.textBetween(from, to, ' ');
+                  
+                  let blockId = '';
+                  let paragraphText = '';
+                  let blockStart = 0;
+                  
+                  editor.state.doc.descendants((node, pos) => {
+                    // Only looking for block level nodes that contain the selection
+                    if (pos <= from && pos + node.nodeSize >= to) {
+                      if (node.attrs.verbaBlockId) {
+                        blockId = node.attrs.verbaBlockId;
+                        paragraphText = node.textContent;
+                        blockStart = pos + 1;
+                        return false;
+                      }
+                    }
+                  });
+                  
+                  if (blockId && onAskVerba) {
+                    onAskVerba({
+                      blockId,
+                      paragraphText,
+                      originalText: text,
+                      startOffset: from - blockStart,
+                      endOffset: to - blockStart
+                    });
+                  }
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-[#0B1628] border border-[#213555] shadow-lg rounded-md text-[13px] font-medium text-white hover:bg-accent hover:border-accent transition-colors"
+              >
+                <Sparkles size={14} className="text-white" />
+                Ask Verba
+              </button>
+            </BubbleMenu>
+          )}
           <EditorContent editor={editor} />
         </div>
       </div>

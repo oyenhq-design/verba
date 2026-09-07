@@ -8,7 +8,7 @@ import {
   PanelRightClose, PanelRightOpen, ChevronDown, CloudOff, Cloud, Save, Sparkles
 } from 'lucide-react';
 import { VerbaWorkspace } from '@/components/workspace/VerbaWorkspace';
-import { DocumentEditor } from '@/components/DocumentEditor';
+import { DocumentEditor, ContextualSelection } from '@/components/DocumentEditor';
 import { Editor } from '@tiptap/react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -84,6 +84,9 @@ export default function WorkspacePage({ params }: { params: { documentId: string
   const [analyzing, setAnalyzing] = useState(false);
   const [error, setError] = useState('');
   const [analyzeError, setAnalyzeError] = useState<string | null>(null);
+
+  // Contextual Assistant
+  const [contextualSelection, setContextualSelection] = useState<ContextualSelection | null>(null);
 
   // Live word count (updated on every save)
   const [liveWordCount, setLiveWordCount] = useState<number | null>(null);
@@ -664,6 +667,11 @@ export default function WorkspacePage({ params }: { params: { documentId: string
           onIssueSelect={selectIssue}
           onEditorReady={(editor) => { editorRef.current = editor; }}
           onUpdate={handleEditorUpdate}
+          onAskVerba={(sel) => {
+            setContextualSelection(sel);
+            setIsWorkspaceOpen(true);
+            setActiveIssueId(null);
+          }}
         />
       </div>
 
@@ -672,12 +680,20 @@ export default function WorkspacePage({ params }: { params: { documentId: string
         <VerbaWorkspace
           documentId={params.documentId}
           onClose={() => setIsWorkspaceOpen(false)}
-          blockId={activeIssue?.block_id || ''}
-          paragraphText={activeBlockText}
+          blockId={activeIssue?.block_id || contextualSelection?.blockId || ''}
+          paragraphText={activeBlockText || contextualSelection?.paragraphText || ''}
           issues={issues}
           issue={activeIssue as unknown as typeof activeIssue}
-          onIssueSelect={selectIssue}
-          onCloseIssue={() => selectIssue(null)}
+          contextualSelection={contextualSelection}
+          onClearContextualSelection={() => setContextualSelection(null)}
+          onIssueSelect={(id) => {
+            selectIssue(id);
+            if (id) setContextualSelection(null);
+          }}
+          onCloseIssue={() => {
+            selectIssue(null);
+            setContextualSelection(null);
+          }}
           onSuggestionAction={handleSuggestionAction as unknown as (...args: unknown[]) => void}
           isAnalyzed={isAnalyzed}
           isAnalyzing={analyzing}
@@ -685,6 +701,10 @@ export default function WorkspacePage({ params }: { params: { documentId: string
           issuesCount={issues.filter(i => i.status === 'open').length}
           docStatus={doc.status}
           analyzeError={analyzeError}
+          onIssueCreated={async (issueId) => {
+            await loadData();
+            selectIssue(issueId);
+          }}
         />
       )}
     </div>

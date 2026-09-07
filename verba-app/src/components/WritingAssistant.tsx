@@ -1,7 +1,9 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Check, X, RefreshCw, Edit2, Loader2, ShieldCheck, Zap } from 'lucide-react';
+import { Check, X, RefreshCw, Edit2, Loader2, ShieldCheck, Zap, Sparkles } from 'lucide-react';
+
+import { ContextualSelection } from './DocumentEditor';
 
 interface Suggestion {
   id: string;
@@ -24,6 +26,8 @@ interface Props {
   blockId: string;
   paragraphText: string;
   issue: Issue | null;
+  contextualSelection?: ContextualSelection | null;
+  onClearContextualSelection?: () => void;
   onClose: () => void;
   onSuggestionAction: (issueId: string, suggestionId: string, action: 'accepted' | 'rejected' | 'manually_edited', newText?: string) => void;
   isAnalyzed: boolean;
@@ -34,14 +38,36 @@ interface Props {
   issuesCount?: number;
   docStatus?: string;
   analyzeError?: string | null;
+  onIssueCreated?: (issueId: string) => void;
 }
 
-export function WritingAssistant({ documentId, blockId, paragraphText, issue, onClose, onSuggestionAction, isAnalyzed, issues = [], onIssueSelect, issuesCount = 0, docStatus = '', analyzeError = null }: Props) {
+export function WritingAssistant({ 
+  documentId, 
+  blockId, 
+  paragraphText, 
+  issue, 
+  contextualSelection,
+  onClearContextualSelection,
+  onClose, 
+  onSuggestionAction, 
+  isAnalyzed, 
+  issues = [], 
+  onIssueSelect, 
+  issuesCount = 0, 
+  docStatus = '', 
+  analyzeError = null,
+  onIssueCreated
+}: Props) {
   const [loadingAlternative, setLoadingAlternative] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState('');
+  
+  // Contextual Edit State
+  const [instruction, setInstruction] = useState('');
+  const [isGeneratingContextual, setIsGeneratingContextual] = useState(false);
 
   // Analysis engine error takes top priority
+
   if (analyzeError) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-center p-8 bg-white">
@@ -66,6 +92,87 @@ export function WritingAssistant({ documentId, blockId, paragraphText, issue, on
         <p className="text-[14px] text-foreground-secondary mb-6 leading-relaxed max-w-[240px]">
           Analysis failed. Head over to the Review tab to try again.
         </p>
+      </div>
+    );
+  }
+
+  const handleGenerateContextual = async () => {
+    if (!contextualSelection || !instruction.trim()) return;
+    setIsGeneratingContextual(true);
+    
+    try {
+      const res = await fetch(`/api/documents/${documentId}/contextual-edit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          blockId: contextualSelection.blockId,
+          paragraphText: contextualSelection.paragraphText,
+          originalText: contextualSelection.originalText,
+          userInstruction: instruction
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.issue_id) {
+          if (onClearContextualSelection) onClearContextualSelection();
+          if (onIssueCreated) {
+            onIssueCreated(data.issue_id);
+          }
+        }
+      } else {
+        console.error('Failed to generate edit:', await res.text());
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsGeneratingContextual(false);
+    }
+  };
+
+  if (contextualSelection) {
+    return (
+      <div className="flex flex-col h-full bg-white relative">
+        <div className="flex items-center justify-between p-4 border-b border-border-light bg-white sticky top-0 z-10 shrink-0">
+          <h3 className="text-[13px] font-semibold text-[#0B1628] uppercase tracking-wider flex items-center gap-2">
+            <Sparkles size={14} className="text-accent" />
+            Ask Verba
+          </h3>
+          <button onClick={onClearContextualSelection} className="p-1 hover:bg-background-secondary rounded text-foreground-secondary hover:text-[#0B1628] transition-colors">
+            <X size={16} />
+          </button>
+        </div>
+        
+        <div className="p-5 flex-1 overflow-y-auto space-y-7">
+          <div>
+            <h4 className="text-[11px] font-semibold text-foreground-secondary uppercase tracking-wider mb-2">Selected Text</h4>
+            <p className="text-[14px] text-ink bg-background-pale p-3 rounded-md border border-border-light leading-relaxed">
+              {contextualSelection.originalText}
+            </p>
+          </div>
+          
+          <div>
+            <h4 className="text-[11px] font-semibold text-foreground-secondary uppercase tracking-wider mb-2">Instruction</h4>
+            <textarea
+              placeholder="e.g. Make this sound more professional..."
+              value={instruction}
+              onChange={e => setInstruction(e.target.value)}
+              className="w-full min-h-[100px] text-[14px] text-ink border border-border-light rounded-md p-3 focus:outline-none focus:ring-1 focus:ring-accent leading-relaxed bg-white resize-y"
+              autoFocus
+            />
+          </div>
+        </div>
+
+        <div className="p-4 border-t border-border-light bg-white shrink-0 z-10">
+          <button 
+            onClick={handleGenerateContextual}
+            disabled={!instruction.trim() || isGeneratingContextual}
+            className="w-full h-[36px] bg-[#0B1628] text-white rounded-md hover:bg-accent transition-colors text-[13px] font-medium flex items-center justify-center gap-2 disabled:opacity-50"
+          >
+            {isGeneratingContextual ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+            {isGeneratingContextual ? 'Generating...' : 'Generate Edit'}
+          </button>
+        </div>
       </div>
     );
   }

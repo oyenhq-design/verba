@@ -38,7 +38,15 @@ export async function GET() {
         'Evaluate with 10 real-world tasks.'
       ],
       scope: 'This covers browser and terminal environments.',
-      methodology: 'Empirical testing with human-in-the-loop verification.'
+      methodology: 'Empirical testing with human-in-the-loop verification.',
+      planned_sections: [
+        'Introduction',
+        'Theoretical Framework',
+        'System Architecture',
+        'Methodology',
+        'Evaluation',
+        'Conclusion'
+      ]
     };
 
     const { error: updateError } = await supabase
