@@ -34,6 +34,8 @@ interface Props {
   workId: string | null;
   onInsertCitation?: (sourceId: string) => void;
   editorHasFocus?: boolean;
+  // Research Props
+  onSourceSaved?: (newSource?: any) => void;
 }
 
 export function VerbaWorkspace({
@@ -58,6 +60,7 @@ export function VerbaWorkspace({
   workId,
   onInsertCitation,
   editorHasFocus,
+  onSourceSaved,
 }: Props) {
   const [activeTab, setActiveTab] = useState<WorkspaceTab>('assistant');
 
@@ -114,7 +117,7 @@ export function VerbaWorkspace({
             analyzeError={analyzeError}
           />
         )}
-        {activeTab === 'research' && <ResearchTab workId={workId} />}
+        {activeTab === 'research' && <ResearchTab workId={workId} onSourceSaved={onSourceSaved} />}
         {activeTab === 'cite' && (
           <CiteTab 
             documentId={documentId} 

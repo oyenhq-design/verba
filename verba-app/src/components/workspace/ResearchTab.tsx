@@ -6,9 +6,10 @@ import { NormalizedSource } from '@/lib/sources/types';
 
 interface ResearchTabProps {
   workId: string | null;
+  onSourceSaved?: (newSource?: any) => void;
 }
 
-export function ResearchTab({ workId }: ResearchTabProps) {
+export function ResearchTab({ workId, onSourceSaved }: ResearchTabProps) {
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<ResearchResult[]>([]);
@@ -82,7 +83,7 @@ export function ResearchTab({ workId }: ResearchTabProps) {
       const data = await res.json();
       if (!res.ok) {
         if (data.error === 'SOURCE_ALREADY_EXISTS') {
-          // Already saved, just mark it
+          // Already saved, just mark it as saved
           setSavedIds(prev => new Set(prev).add(trackId));
           return;
         }
@@ -90,6 +91,8 @@ export function ResearchTab({ workId }: ResearchTabProps) {
       }
       
       setSavedIds(prev => new Set(prev).add(trackId));
+      // Notify parent so CitationProvider context is updated immediately
+      onSourceSaved?.(data);
     } catch (err: any) {
       alert(err.message);
     } finally {

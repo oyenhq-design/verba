@@ -596,7 +596,25 @@ export default function WorkspacePage({ params }: { params: { documentId: string
     }
   };
 
+  // ─── Refresh sources after Research saves a new source ──────────────────
+  const refreshSources = useCallback(async (newSource?: any) => {
+    if (!doc?.work_id) return;
+    if (newSource) {
+      // Optimistic: prepend the returned row immediately
+      setSources(prev => [newSource, ...prev]);
+      return;
+    }
+    // Fallback: full refetch
+    const { data } = await supabase
+      .from('work_sources')
+      .select('*')
+      .eq('work_id', doc.work_id)
+      .order('created_at', { ascending: false });
+    if (data) setSources(data);
+  }, [doc?.work_id, supabase]);
+
   return (
+    <CitationProvider sources={sources} style={citationStyle} documentCitations={documentCitations}>
     <div className="flex h-full bg-[#F6F8FB] overflow-hidden relative">
       {/* 2. Left Panel: Document Outline */}
       {!isFocusMode && isOutlineOpen && (
@@ -727,7 +745,6 @@ export default function WorkspacePage({ params }: { params: { documentId: string
           </div>
         </header>
 
-        <CitationProvider sources={sources} style={citationStyle} documentCitations={documentCitations}>
           <div className="flex-1 overflow-y-auto">
             <DocumentEditor
               initialBlocks={initialEditorJson ? undefined : initialBlocks}
@@ -749,7 +766,6 @@ export default function WorkspacePage({ params }: { params: { documentId: string
             />
             <BibliographyPreview />
           </div>
-        </CitationProvider>
       </div>
 
       {/* 4. Right Panel: Verba Workspace */}
@@ -784,6 +800,7 @@ export default function WorkspacePage({ params }: { params: { documentId: string
           }}
           workId={doc.work_id || null}
           editorHasFocus={editorHasFocus}
+          onSourceSaved={refreshSources}
           onInsertCitation={async (sourceId) => {
             if (!editorRef.current) return;
             const editor = editorRef.current;
@@ -794,12 +811,14 @@ export default function WorkspacePage({ params }: { params: { documentId: string
                 body: JSON.stringify({ work_source_id: sourceId })
               });
               
+              // Read body once — covers both success and error
+              const data = await res.json();
+
               if (!res.ok) {
-                const data = await res.json();
-                throw new Error(data.message || 'Failed to insert citation');
+                throw new Error(data.error || data.message || 'Failed to insert citation');
               }
               
-              const { citationId } = await res.json();
+              const { citationId } = data;
               
               const { from, to } = editor.state.selection;
               editor.commands.insertContentAt(to, {
@@ -828,5 +847,6 @@ export default function WorkspacePage({ params }: { params: { documentId: string
         />
       )}
     </div>
+    </CitationProvider>
   );
 }
