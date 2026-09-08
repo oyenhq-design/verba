@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BookOpen, Plus, Search, Trash2, Edit2, Loader2, FileText, ChevronDown } from 'lucide-react';
+import { BookOpen, Plus, Search, Trash2, Loader2, FileText, AlertCircle, X } from 'lucide-react';
 import { useCitationContext } from './CitationContext';
 import { formatBibliographyEntry } from '@/lib/citations/formatter';
 
@@ -15,11 +15,14 @@ export function CiteTab({ documentId, workId, onInsertCitation, editorHasFocus }
   const [loading, setLoading] = useState(false);
   const [localSources, setLocalSources] = useState(sources);
   const [searchQuery, setSearchQuery] = useState('');
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [deleteError, setDeleteError]   = useState<string | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
   
   const [showAddForm, setShowAddForm] = useState(false);
   const [formData, setFormData] = useState({
     title: '',
-    authors: '', // comma separated for simple input
+    authors: '',
     publication_year: '',
     source_type: 'journal_article',
   });
@@ -87,26 +90,38 @@ export function CiteTab({ documentId, workId, onInsertCitation, editorHasFocus }
     }
   };
 
-  const handleDelete = async (sourceId: string) => {
+  const handleDeleteRequest = (sourceId: string) => {
     const isCited = documentCitations.some(c => c.sourceId === sourceId);
     if (isCited) {
-      alert("This source is used in this document. Remove its citations before deleting it.");
+      setDeleteError(
+        'This source is used in your document. Remove its citation from the editor before deleting the source.'
+      );
       return;
     }
-    
-    if (!confirm("Are you sure you want to delete this source?")) return;
+    setDeleteError(null);
+    setDeleteConfirmId(sourceId);
+  };
 
+  const handleDeleteConfirm = async () => {
+    if (!deleteConfirmId) return;
+    const sourceId = deleteConfirmId;
+    setDeleteConfirmId(null);
+    setDeleteLoading(true);
+    setDeleteError(null);
     try {
       const res = await fetch(`/api/works/${workId}/sources/${sourceId}`, {
         method: 'DELETE'
       });
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.message || 'Failed to delete');
+        // Prefer server's human message; fall back to generic
+        throw new Error(data.message || data.error || 'Failed to delete source.');
       }
-      setLocalSources(localSources.filter(s => s.id !== sourceId));
+      setLocalSources(prev => prev.filter(s => s.id !== sourceId));
     } catch (err: any) {
-      alert(err.message);
+      setDeleteError(err.message);
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
@@ -129,6 +144,17 @@ export function CiteTab({ documentId, workId, onInsertCitation, editorHasFocus }
           />
         </div>
       </div>
+
+      {/* Inline delete error/info banner */}
+      {deleteError && (
+        <div className="mx-4 mt-3 flex items-start gap-2 bg-status-error/10 border border-status-error/20 rounded p-2.5 text-[12px] text-status-error">
+          <AlertCircle size={13} className="shrink-0 mt-[1px]" />
+          <span className="flex-1 leading-snug">{deleteError}</span>
+          <button onClick={() => setDeleteError(null)} className="shrink-0 hover:opacity-70">
+            <X size={12} />
+          </button>
+        </div>
+      )}
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {localSources.length === 0 && !showAddForm ? (
@@ -213,9 +239,32 @@ export function CiteTab({ documentId, workId, onInsertCitation, editorHasFocus }
                       Insert Citation
                     </button>
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button onClick={() => source.id && handleDelete(source.id)} className="p-1.5 text-status-error hover:bg-status-error/10 rounded">
-                        <Trash2 size={13} />
-                      </button>
+                      {deleteConfirmId === source.id ? (
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[11px] text-foreground-secondary">Delete?</span>
+                          <button
+                            onClick={handleDeleteConfirm}
+                            disabled={deleteLoading}
+                            className="px-2 py-0.5 bg-status-error text-white text-[11px] font-medium rounded hover:opacity-90 disabled:opacity-50"
+                          >
+                            {deleteLoading ? <Loader2 size={11} className="animate-spin" /> : 'Yes'}
+                          </button>
+                          <button
+                            onClick={() => setDeleteConfirmId(null)}
+                            className="px-2 py-0.5 bg-black/5 text-[#0B1628] text-[11px] font-medium rounded hover:bg-black/10"
+                          >
+                            No
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => source.id && handleDeleteRequest(source.id)}
+                          className="p-1.5 text-status-error hover:bg-status-error/10 rounded"
+                          title="Delete source"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>

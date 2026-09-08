@@ -1,6 +1,5 @@
-import { createClient } from '@supabase/supabase-js';
-import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
+import { createClient } from '@/lib/supabase/server';
 import { SourceSchema } from '@/lib/sources/normalize';
 
 export async function PATCH(
@@ -8,17 +7,7 @@ export async function PATCH(
   { params }: { params: { workId: string, sourceId: string } }
 ) {
   try {
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        global: {
-          headers: {
-            Authorization: `Bearer ${cookies().get('sb-access-token')?.value || ''}`,
-          },
-        },
-      }
-    );
+    const supabase = createClient();
 
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
@@ -67,24 +56,30 @@ export async function DELETE(
   { params }: { params: { workId: string, sourceId: string } }
 ) {
   try {
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        global: {
-          headers: {
-            Authorization: `Bearer ${cookies().get('sb-access-token')?.value || ''}`,
-          },
-        },
-      }
-    );
+    const supabase = createClient();
 
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Attempt deletion
+    // Precheck: does any document_citations row reference this source?
+    // This gives a precise 409 with citation count before hitting the FK.
+    // The FK constraint remains the final DB-level guarantee.
+    const { count: citCount } = await supabase
+      .from('document_citations')
+      .select('id', { count: 'exact', head: true })
+      .eq('work_source_id', params.sourceId);
+
+    if (citCount && citCount > 0) {
+      return NextResponse.json({
+        error: 'SOURCE_IN_USE',
+        message: `This source is used by ${citCount} citation${citCount === 1 ? '' : 's'} in your document. Remove the citation${citCount === 1 ? '' : 's'} before deleting this source.`,
+        citationCount: citCount,
+      }, { status: 409 });
+    }
+
+    // Attempt deletion — FK constraint is the final guarantee
     const { error } = await supabase
       .from('work_sources')
       .delete()
@@ -92,11 +87,11 @@ export async function DELETE(
       .eq('work_id', params.workId);
 
     if (error) {
-      // Postgres error 23503 is foreign_key_violation
+      // Postgres 23503 = foreign_key_violation (race condition after precheck)
       if (error.code === '23503') {
-        return NextResponse.json({ 
-          error: 'SOURCE_IN_USE', 
-          message: 'This source is used in this document. Remove its citations before deleting it.'
+        return NextResponse.json({
+          error: 'SOURCE_IN_USE',
+          message: 'This source is currently used by one or more citations. Remove them before deleting.',
         }, { status: 409 });
       }
       return NextResponse.json({ error: error.message }, { status: 500 });
