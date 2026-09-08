@@ -21,7 +21,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
     }
 
     // 2. Strict Whitelist & Validation
-    const allowedClientEvents = ['paste_inserted', 'verba_suggestion_accepted', 'verba_suggestion_rejected'];
+    const allowedClientEvents = ['paste_inserted', 'verba_suggestion_accepted', 'verba_suggestion_rejected', 'citation_inserted'];
     if (!allowedClientEvents.includes(event_type)) {
       return NextResponse.json({ error: `Event type ${event_type} is not allowed from the client.` }, { status: 400 });
     }

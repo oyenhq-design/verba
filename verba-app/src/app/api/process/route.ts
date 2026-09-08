@@ -78,7 +78,6 @@ export async function POST(request: Request) {
     // 6. Atomically Create Work and Document via RPC
     const { error: rpcError } = await supabase.rpc('create_uploaded_work_document', {
       p_document_id: documentId,
-      p_user_id: user.id,
       p_title: title,
       p_original_filename: originalFilename,
       p_mime_type: mimeType,

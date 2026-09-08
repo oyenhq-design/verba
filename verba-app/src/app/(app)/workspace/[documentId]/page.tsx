@@ -160,8 +160,7 @@ export default function WorkspacePage({ params }: { params: { documentId: string
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
           const { data: newWorkId, error: adoptError } = await supabase.rpc('adopt_document_into_work', {
-            p_document_id: docData.id,
-            p_user_id: user.id
+            p_document_id: docData.id
           });
           if (!adoptError && newWorkId) {
             docData.work_id = newWorkId;

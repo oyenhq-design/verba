@@ -45,7 +45,6 @@ export async function POST(req: Request) {
 
     const { data: documentId, error: dbError } = await supabase
       .rpc('create_blank_work_document', {
-        p_user_id: user.id,
         p_title: type === 'idea' ? 'Untitled Idea' : 'Untitled Document',
         p_editor_state: editorState,
         p_parsed_content: parsedContent
