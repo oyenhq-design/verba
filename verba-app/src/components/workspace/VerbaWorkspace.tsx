@@ -4,6 +4,7 @@ import { ResearchTab } from './ResearchTab';
 import { CiteTab } from './CiteTab';
 import { ReviewTab } from './ReviewTab';
 import { ProvePanel } from './ProvePanel';
+import { CitationIntegrityTab } from './CitationIntegrityTab';
 import { WritingAssistant, Issue } from '../WritingAssistant';
 import { PanelRightClose } from 'lucide-react';
 import { ContextualSelection } from '../DocumentEditor';
@@ -120,6 +121,13 @@ export function VerbaWorkspace({
             workId={workId} 
             onInsertCitation={onInsertCitation!} 
             editorHasFocus={editorHasFocus ?? false} 
+          />
+        )}
+        {activeTab === 'integrity' && (
+          <CitationIntegrityTab 
+            documentId={documentId}
+            workId={workId}
+            onNavigate={(tab) => setActiveTab(tab)}
           />
         )}
         {activeTab === 'prove' && <ProvePanel documentId={documentId} />}
