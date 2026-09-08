@@ -51,13 +51,23 @@ export async function POST(req: Request) {
       });
 
     if (dbError || !documentId) {
-      console.error('Database insertion error:', dbError);
-      return NextResponse.json({ error: 'Failed to create document' }, { status: 500 });
+      console.error('create_blank_work_document failed', {
+        code: dbError?.code,
+        message: dbError?.message,
+        details: dbError?.details,
+        hint: dbError?.hint
+      });
+      return NextResponse.json({ 
+        success: false, 
+        error: 'DOCUMENT_CREATE_FAILED',
+        code: dbError?.code,
+        message: dbError?.message
+      }, { status: 500 });
     }
 
     return NextResponse.json({ documentId });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error creating new document:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal Server Error', message: error?.message }, { status: 500 });
   }
 }

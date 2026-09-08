@@ -113,7 +113,7 @@ export function VerbaWorkspace({
             analyzeError={analyzeError}
           />
         )}
-        {activeTab === 'research' && <ResearchTab />}
+        {activeTab === 'research' && <ResearchTab workId={workId} />}
         {activeTab === 'cite' && (
           <CiteTab 
             documentId={documentId} 
