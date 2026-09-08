@@ -1,5 +1,15 @@
 import { NormalizedSource } from '../sources/types';
 import { formatBibliographyEntry, CitationStyle } from './formatter';
+import { ClaimScope, extractClaimScope } from './scope';
+import { classifyEvidenceAvailability, EvidenceAvailabilityResult, EvidencePassage } from './evidence';
+import {
+  evaluateTopicRelevance,
+  evaluateClaimSupportDeterministic,
+  TopicRelevanceStatus,
+  ClaimSupportStatus,
+  ClaimSupportResult,
+  TopicRelevanceResult,
+} from './claimSupport';
 
 // ─── Reason Codes ─────────────────────────────────────────────────────────────
 
@@ -126,8 +136,31 @@ export type CitationIntegrityResult = {
   };
 
   claimSupport: {
-    status: 'not_checked';
+    status: ClaimSupportStatus;
+    uxTier: 'good' | 'warning' | 'problem' | 'unavailable' | 'not_checked';
+    shortMessage: string | null;
+    detailMessage: string | null;
+    supportedParts: string[];
+    unresolvedParts: string[];
+    evidencePassages: EvidencePassage[];
+    temporalWarning: string | null;
+    /** claim_hash this result was computed for — used for stale detection */
+    computedForHash: string | null;
+    /** true if the claim text changed since last evaluation */
+    isStale: boolean;
   };
+
+  topicRelevance: {
+    status: TopicRelevanceStatus;
+    reason: string;
+    flagged: boolean;
+  };
+
+  /** H2 scope — sentence and atomic claims around the citation node */
+  claimScope: ClaimScope | null;
+
+  /** Evidence level and availability result */
+  evidenceDetail: EvidenceAvailabilityResult | null;
 
   warnings: string[];
 
@@ -152,7 +185,11 @@ export function evaluateCitationIntegrity(
   citationId: string,
   sourceId: string | null,
   workSources: NormalizedSource[],
-  style: CitationStyle
+  style: CitationStyle,
+  /** Sentence/paragraph text around the citation node, from DOM or editor state. */
+  contextText?: string,
+  /** Previously computed claim hash — used to detect stale analysis. */
+  previousClaimHash?: string
 ): CitationIntegrityResult {
   const result: CitationIntegrityResult = {
     citationId,
@@ -161,7 +198,21 @@ export function evaluateCitationIntegrity(
     sourceIdentity: { status: 'unverified', providers: [], reasons: [] },
     bibliography: { status: 'missing', reasons: [] },
     evidenceAvailability: { status: 'not_checked' },
-    claimSupport: { status: 'not_checked' },
+    claimSupport: {
+      status: 'not_checked',
+      uxTier: 'not_checked',
+      shortMessage: null,
+      detailMessage: null,
+      supportedParts: [],
+      unresolvedParts: [],
+      evidencePassages: [],
+      temporalWarning: null,
+      computedForHash: null,
+      isStale: false,
+    },
+    topicRelevance: { status: 'unknown', reason: '', flagged: false },
+    claimScope: null,
+    evidenceDetail: null,
     warnings: [],
     overall: 'needs_review',
     primaryReason: null,
@@ -261,6 +312,68 @@ export function evaluateCitationIntegrity(
   } else {
     // sourceId set but source not found — bibliography missing
     collectedReasons.push(makeReason('bibliography_missing'));
+  }
+
+  // ── H2: Claim Scope, Evidence Level, Topic Relevance, Claim Support ─────────
+  if (source && contextText) {
+    // H2A: Extract claim scope
+    const scope = extractClaimScope(citationId, sourceId, contextText);
+    result.claimScope = scope;
+
+    // Stale detection: if claim text changed since last check, mark stale
+    if (previousClaimHash && previousClaimHash !== scope.claimHash) {
+      result.claimSupport.isStale = true;
+    }
+
+    // H2B: Classify evidence availability
+    const evidenceDetail = classifyEvidenceAvailability(source);
+    result.evidenceDetail = evidenceDetail;
+    // Keep legacy evidenceAvailability for H1 compatibility
+    result.evidenceAvailability.status =
+      evidenceDetail.level === 0
+        ? 'metadata_only'
+        : evidenceDetail.level === 1
+        ? 'abstract_available'
+        : 'full_text_available';
+
+    // H2A: Topic Relevance (separate from H1 search relevance)
+    const relevance = evaluateTopicRelevance(source, scope);
+    result.topicRelevance = relevance;
+    if (relevance.flagged) {
+      result.warnings.push('Source may be unrelated to the cited statement.');
+    }
+
+    // H2C: Deterministic claim support evaluation
+    if (!result.claimSupport.isStale) {
+      const supportResult = evaluateClaimSupportDeterministic(scope, evidenceDetail, source);
+      result.claimSupport = {
+        status: supportResult.status,
+        uxTier: supportResult.uxTier,
+        shortMessage: supportResult.shortMessage,
+        detailMessage: supportResult.detailMessage,
+        supportedParts: supportResult.supportedParts,
+        unresolvedParts: supportResult.unresolvedParts,
+        evidencePassages: supportResult.evidencePassages,
+        temporalWarning: supportResult.temporalWarning,
+        computedForHash: supportResult.computedForHash,
+        isStale: false,
+      };
+
+      // Temporal warning should be surfaced as a warning (but not critical)
+      if (supportResult.temporalWarning) {
+        result.warnings.push(supportResult.temporalWarning);
+      }
+    }
+  } else if (source && !contextText) {
+    // Source exists but no context text — classify evidence level for informational display
+    const evidenceDetail = classifyEvidenceAvailability(source);
+    result.evidenceDetail = evidenceDetail;
+    result.evidenceAvailability.status =
+      evidenceDetail.level === 0
+        ? 'metadata_only'
+        : evidenceDetail.level === 1
+        ? 'abstract_available'
+        : 'full_text_available';
   }
 
   // Source exists but bibliography status is still 'missing' (initial default)

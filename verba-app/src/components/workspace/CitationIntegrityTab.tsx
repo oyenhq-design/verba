@@ -1,11 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   BadgeCheck, ShieldAlert, CheckCircle, AlertTriangle,
-  ChevronDown, FileText, Info,
+  ChevronDown, FileText, Info, Clock, Unlink2, Search, ExternalLink,
 } from 'lucide-react';
 import { useCitationContext } from './CitationContext';
 import { WorkspaceTab } from './WorkspaceNavigation';
 import { evaluateCitationIntegrity, CitationIntegrityResult } from '@/lib/citations/integrity';
+import { formatInlineCitation } from '@/lib/citations/formatter';
 
 interface Props {
   documentId: string;
@@ -13,84 +14,216 @@ interface Props {
   onNavigate: (tab: WorkspaceTab) => void;
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+type EvaluatedCitation = {
+  result: CitationIntegrityResult;
+  contextText: string;
+  inlineLabel: string;
+  /** claim hash from previous render — used for stale detection */
+  prevHash: string | null;
+};
 
-function OverallBadge({ overall }: { overall: CitationIntegrityResult['overall'] }) {
-  switch (overall) {
-    case 'healthy':
-      return (
-        <span className="inline-flex items-center gap-1 text-status-success font-semibold text-[12px]">
-          <CheckCircle size={13} /> Healthy
-        </span>
-      );
-    case 'needs_review':
-      return (
-        <span className="inline-flex items-center gap-1 text-status-warning font-semibold text-[12px]">
-          <AlertTriangle size={13} /> Needs Review
-        </span>
-      );
-    case 'critical':
-      return (
-        <span className="inline-flex items-center gap-1 text-status-error font-semibold text-[12px]">
-          <ShieldAlert size={13} /> Critical
-        </span>
-      );
-  }
+// ─── H2D: UX Tier → Display Config ────────────────────────────────────────────
+
+type UXTier = 'good' | 'warning' | 'problem';
+
+function getTier(result: CitationIntegrityResult): UXTier {
+  if (result.overall === 'critical') return 'problem';
+  if (result.overall === 'needs_review') return 'warning';
+  // H2: claim support or relevance flags can also trigger warning
+  if (result.topicRelevance.flagged) return 'warning';
+  if (result.claimSupport.uxTier === 'problem') return 'problem';
+  if (result.claimSupport.uxTier === 'warning') return 'warning';
+  if (result.claimSupport.temporalWarning) return 'warning';
+  return 'good';
 }
 
-function renderDimensionStatus(status: string) {
-  switch (status) {
-    case 'valid':
-    case 'confirmed':
-      return (
-        <span className="text-status-success flex items-center gap-1">
-          <CheckCircle size={12} /> {status.charAt(0).toUpperCase() + status.slice(1)}
-        </span>
-      );
+function tierConfig(tier: UXTier) {
+  switch (tier) {
+    case 'good':
+      return {
+        icon: <CheckCircle size={14} className="text-status-success" />,
+        label: 'Looks good',
+        dot: 'bg-status-success',
+        border: 'border-status-success/20',
+        bg: 'bg-status-success/5',
+        textColor: 'text-status-success',
+        symbol: '✓',
+      };
     case 'warning':
-    case 'broken':
-    case 'conflict':
-    case 'missing':
-      return (
-        <span className="text-status-error flex items-center gap-1">
-          <ShieldAlert size={12} /> {status.charAt(0).toUpperCase() + status.slice(1)}
-        </span>
-      );
-    case 'partial':
-    case 'unverified':
-      return (
-        <span className="text-status-warning flex items-center gap-1">
-          <AlertTriangle size={12} /> {status.charAt(0).toUpperCase() + status.slice(1)}
-        </span>
-      );
-    case 'full_text_available':
-      return <span className="text-status-success">Full text available</span>;
-    case 'abstract_available':
-      return <span className="text-foreground-secondary">Abstract available</span>;
-    case 'metadata_only':
-      return <span className="text-foreground-secondary">Metadata only</span>;
-    default:
-      return (
-        <span className="text-foreground-secondary capitalize">
-          {status.replace(/_/g, ' ')}
-        </span>
-      );
+      return {
+        icon: <AlertTriangle size={14} className="text-status-warning" />,
+        label: 'Worth checking',
+        dot: 'bg-status-warning',
+        border: 'border-status-warning/30',
+        bg: 'bg-status-warning/5',
+        textColor: 'text-status-warning',
+        symbol: '⚠',
+      };
+    case 'problem':
+      return {
+        icon: <ShieldAlert size={14} className="text-status-error" />,
+        label: 'Problem found',
+        dot: 'bg-status-error',
+        border: 'border-status-error/30',
+        bg: 'bg-status-error/5',
+        textColor: 'text-status-error',
+        symbol: '●',
+      };
   }
 }
 
-// ─── Component ────────────────────────────────────────────────────────────────
+function primaryH2Message(result: CitationIntegrityResult): string {
+  // Stale
+  if (result.claimSupport.isStale) {
+    return 'The claim text has changed. Previous support analysis may no longer apply.';
+  }
+  // Possible contradiction first
+  if (result.claimSupport.status === 'possibly_contradicted') {
+    return 'The available source evidence appears to conflict with this statement.';
+  }
+  // Problem-level H1 reason
+  if (result.primaryReason && result.primaryReason.severity === 'critical') {
+    return result.primaryReason.shortMessage;
+  }
+  // Unrelated citation
+  if (result.topicRelevance.status === 'unrelated') {
+    return 'This source appears unrelated to the statement it is attached to.';
+  }
+  if (result.topicRelevance.status === 'low' && result.topicRelevance.flagged) {
+    return 'This source has limited topical overlap with the cited statement.';
+  }
+  // Claim support issues
+  if (result.claimSupport.shortMessage) {
+    return result.claimSupport.shortMessage;
+  }
+  // Temporal
+  if (result.claimSupport.temporalWarning) {
+    return 'Time-sensitive claim: the cited source may be outdated.';
+  }
+  // H1 review reasons
+  if (result.primaryReason) {
+    return result.primaryReason.shortMessage;
+  }
+  return 'No issues detected.';
+}
+
+// ─── Sub-components ───────────────────────────────────────────────────────────
+
+function EvidenceBadge({ result }: { result: CitationIntegrityResult }) {
+  if (!result.evidenceDetail) return null;
+  const level = result.evidenceDetail.level;
+  const colors = ['text-foreground-muted', 'text-foreground-secondary', 'text-status-success', 'text-status-success'];
+  return (
+    <span className={`text-[10px] font-medium ${colors[level]}`}>
+      {result.evidenceDetail.label}
+    </span>
+  );
+}
+
+function ClaimSupportBadge({ result }: { result: CitationIntegrityResult }) {
+  const { status, uxTier, isStale } = result.claimSupport;
+  if (status === 'not_checked') return null;
+  if (isStale) return <span className="text-[10px] text-foreground-muted italic">Analysis may be stale</span>;
+
+  const map: Record<string, { label: string; color: string }> = {
+    insufficient_evidence: { label: 'Not enough evidence', color: 'text-foreground-muted' },
+    supported: { label: 'Supported', color: 'text-status-success' },
+    partially_supported: { label: 'Partially supported', color: 'text-status-warning' },
+    unclear: { label: 'Could not confirm', color: 'text-foreground-secondary' },
+    possibly_contradicted: { label: 'Possible conflict', color: 'text-status-error' },
+  };
+
+  const cfg = map[status] || { label: status, color: 'text-foreground-muted' };
+  return <span className={`text-[10px] font-medium ${cfg.color}`}>{cfg.label}</span>;
+}
+
+function EvidencePassages({ result }: { result: CitationIntegrityResult }) {
+  const passages = result.claimSupport.evidencePassages;
+  if (!passages || passages.length === 0) return null;
+  return (
+    <div className="mt-3 space-y-2">
+      <span className="text-[10px] font-bold uppercase tracking-wider text-foreground-muted block">Evidence checked</span>
+      {passages.map((p, i) => (
+        <div key={i} className="bg-white/80 border border-border-light rounded p-2 text-[11px] text-foreground-secondary leading-relaxed">
+          {p.section && <span className="text-[9px] uppercase font-bold text-foreground-muted block mb-0.5">{p.section}</span>}
+          <span className="italic">"{p.text}"</span>
+          {p.sourceUrl && (
+            <a
+              href={p.sourceUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="ml-2 text-accent hover:underline inline-flex items-center gap-0.5"
+            >
+              <ExternalLink size={10} /> Open source
+            </a>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ActionBar({
+  result,
+  onNavigate,
+}: {
+  result: CitationIntegrityResult;
+  onNavigate: (tab: WorkspaceTab) => void;
+}) {
+  const { status } = result.claimSupport;
+  const tier = getTier(result);
+
+  const canFindBetter =
+    result.topicRelevance.status === 'unrelated' ||
+    result.topicRelevance.status === 'low' ||
+    status === 'insufficient_evidence' ||
+    status === 'partially_supported';
+
+  const canViewSource = result.evidenceDetail && result.evidenceDetail.oaUrl;
+
+  return (
+    <div className="flex flex-wrap gap-1.5 pt-2 mt-1 border-t border-border-light">
+      {canFindBetter && (
+        <button
+          onClick={() => onNavigate('research')}
+          className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium bg-accent/10 text-accent rounded hover:bg-accent/20 transition-colors"
+        >
+          <Search size={10} /> Find better source
+        </button>
+      )}
+      {canViewSource && (
+        <a
+          href={result.evidenceDetail!.oaUrl!}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium bg-black/5 text-foreground-secondary rounded hover:bg-black/10 transition-colors"
+        >
+          <ExternalLink size={10} /> View source
+        </a>
+      )}
+      {tier !== 'good' && (
+        <button className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium bg-black/5 text-foreground-secondary rounded hover:bg-black/10 transition-colors">
+          Keep citation
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
 
 export function CitationIntegrityTab({ documentId, workId, onNavigate }: Props) {
   const { sources, style, documentCitations } = useCitationContext();
-  const [results, setResults] = useState<{ result: CitationIntegrityResult; contextText: string }[]>([]);
-  const [filter, setFilter] = useState<'all' | 'needs_review'>('all');
+  const [evaluations, setEvaluations] = useState<EvaluatedCitation[]>([]);
+  const [showGood, setShowGood] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const prevHashesRef = useRef<Record<string, string>>({});
 
   useEffect(() => {
-    const newResults = documentCitations.map(cit => {
-      const result = evaluateCitationIntegrity(cit.citationId, cit.sourceId, sources, style);
+    const newEvals: EvaluatedCitation[] = documentCitations.map(cit => {
+      const prevHash = prevHashesRef.current[cit.citationId] || null;
 
-      // Deterministic context extraction via DOM
+      // DOM context extraction
       let contextText = '';
       try {
         const el = document.querySelector(`[data-citation-id="${cit.citationId}"]`);
@@ -99,12 +232,31 @@ export function CitationIntegrityTab({ documentId, workId, onNavigate }: Props) 
         }
       } catch (_) {}
 
-      return { result, contextText };
+      const result = evaluateCitationIntegrity(
+        cit.citationId,
+        cit.sourceId,
+        sources,
+        style,
+        contextText || undefined,
+        prevHash || undefined,
+      );
+
+      // Update hash cache for stale detection on next render
+      if (result.claimScope?.claimHash) {
+        prevHashesRef.current[cit.citationId] = result.claimScope.claimHash;
+      }
+
+      const source = sources.find(s => s.id === cit.sourceId) || null;
+      const inlineLabel = source
+        ? formatInlineCitation(source, style, undefined)
+        : 'Unknown source';
+
+      return { result, contextText, inlineLabel, prevHash };
     });
-    setResults(newResults);
+    setEvaluations(newEvals);
   }, [documentCitations, sources, style]);
 
-  // ── No-work guard ──────────────────────────────────────────────────────────
+  // ── Guards ─────────────────────────────────────────────────────────────────
   if (!workId) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-center p-6 bg-[#F6F8FB]">
@@ -118,7 +270,6 @@ export function CitationIntegrityTab({ documentId, workId, onNavigate }: Props) 
     );
   }
 
-  // ── Empty state ────────────────────────────────────────────────────────────
   if (documentCitations.length === 0) {
     return (
       <div className="flex flex-col h-full bg-[#F6F8FB]">
@@ -147,275 +298,280 @@ export function CitationIntegrityTab({ documentId, workId, onNavigate }: Props) 
     );
   }
 
-  // ── Counts ─────────────────────────────────────────────────────────────────
-  const healthyCount  = results.filter(r => r.result.overall === 'healthy').length;
-  const reviewCount   = results.filter(r => r.result.overall === 'needs_review').length;
-  const criticalCount = results.filter(r => r.result.overall === 'critical').length;
+  // ── Exception-First UX ─────────────────────────────────────────────────────
+  const good     = evaluations.filter(e => getTier(e.result) === 'good');
+  const warnings = evaluations.filter(e => getTier(e.result) === 'warning');
+  const problems = evaluations.filter(e => getTier(e.result) === 'problem');
+  const total    = evaluations.length;
 
-  const filtered = filter === 'all'
-    ? results
-    : results.filter(r => r.result.overall !== 'healthy');
+  const needsAttention = [...problems, ...warnings];
 
-  // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div className="flex flex-col h-full bg-[#F6F8FB]">
 
-      {/* Summary Header */}
+      {/* ── Summary Header ── */}
       <div className="p-4 border-b border-border-light shrink-0 bg-white">
         <h3 className="text-[14px] font-semibold text-[#0B1628]">Citation Integrity</h3>
-        <p className="text-[12px] text-foreground-secondary mt-1 leading-relaxed">
-          Check whether citations are properly connected to your claims and sources.
+        <p className="text-[12px] text-foreground-secondary mt-0.5 leading-relaxed">
+          {total} citation{total !== 1 ? 's' : ''} checked
         </p>
 
-        <div className="mt-4 flex items-center gap-3 text-[12px]">
-          <div className="flex items-center gap-1.5 font-medium text-foreground-secondary">
+        <div className="mt-3 flex items-center gap-4 text-[12px]">
+          <span className="flex items-center gap-1.5 text-status-success font-medium">
             <span className="w-2 h-2 rounded-full bg-status-success" />
-            {healthyCount} Healthy
-          </div>
-          <div className="flex items-center gap-1.5 font-medium text-foreground-secondary">
-            <span className="w-2 h-2 rounded-full bg-status-warning" />
-            {reviewCount} Needs Review
-          </div>
-          <div className="flex items-center gap-1.5 font-medium text-foreground-secondary">
-            <span className="w-2 h-2 rounded-full bg-status-error" />
-            {criticalCount} Critical
-          </div>
-        </div>
-
-        <div className="mt-4 flex items-center gap-2">
-          <button
-            onClick={() => setFilter('all')}
-            className={`px-3 py-1 text-[11px] font-medium rounded-full transition-colors ${
-              filter === 'all' ? 'bg-black/10 text-[#0B1628]' : 'text-foreground-secondary hover:bg-black/5'
-            }`}
-          >
-            All Citations
-          </button>
-          <button
-            onClick={() => setFilter('needs_review')}
-            className={`px-3 py-1 text-[11px] font-medium rounded-full transition-colors ${
-              filter === 'needs_review' ? 'bg-black/10 text-[#0B1628]' : 'text-foreground-secondary hover:bg-black/5'
-            }`}
-          >
-            Needs Review
-          </button>
+            {good.length} look good
+          </span>
+          {warnings.length > 0 && (
+            <span className="flex items-center gap-1.5 text-status-warning font-medium">
+              <span className="w-2 h-2 rounded-full bg-status-warning" />
+              {warnings.length} worth checking
+            </span>
+          )}
+          {problems.length > 0 && (
+            <span className="flex items-center gap-1.5 text-status-error font-medium">
+              <span className="w-2 h-2 rounded-full bg-status-error" />
+              {problems.length} problem{problems.length !== 1 ? 's' : ''} found
+            </span>
+          )}
         </div>
       </div>
 
-      {/* Citation List */}
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
-        {filtered.map(({ result, contextText }) => {
-          const isExpanded = expandedId === result.citationId;
-          const source = sources.find(s => s.id === result.sourceId);
 
-          return (
-            <div
-              key={result.citationId}
-              className={`bg-white border rounded shadow-sm flex flex-col ${
-                result.overall === 'critical'
-                  ? 'border-status-error/30'
-                  : result.overall === 'needs_review'
-                  ? 'border-status-warning/40'
-                  : 'border-border-light'
-              }`}
-            >
-              {/* ── Overall status + primary reason (collapsed header) ── */}
-              <div className={`px-3 pt-3 pb-2 flex flex-col gap-0.5 border-b ${
-                result.overall === 'critical'
-                  ? 'border-status-error/20 bg-status-error/5'
-                  : result.overall === 'needs_review'
-                  ? 'border-status-warning/20 bg-status-warning/5'
-                  : 'border-border-light bg-status-success/5'
-              }`}>
-                <OverallBadge overall={result.overall} />
-                {result.primaryReason ? (
-                  <p className="text-[11px] text-foreground-secondary leading-snug">
-                    {result.primaryReason.shortMessage}
-                  </p>
-                ) : (
-                  <p className="text-[11px] text-foreground-secondary leading-snug">
-                    No structural citation issues detected.
-                  </p>
-                )}
-              </div>
+        {/* ── Needs Attention Section ── */}
+        {needsAttention.length > 0 && (
+          <>
+            <p className="text-[11px] font-bold uppercase tracking-widest text-foreground-muted mb-2">
+              Needs your attention
+            </p>
 
-              <div className="p-3 text-[12px] space-y-2.5">
-                {/* Source Title & Authors */}
-                <div>
-                  <h4 className="font-semibold text-[#0B1628] leading-tight mb-1">
-                    {source ? source.title : 'Unknown Source'}
-                  </h4>
-                  {source && (
-                    <div className="text-foreground-secondary text-[11px]">
-                      ({source.authors.map(a => a.family).join(', ')},{' '}
-                      {source.publication_year || 'Unknown Year'})
-                    </div>
-                  )}
-                </div>
+            {needsAttention.map(({ result, contextText, inlineLabel }) => {
+              const tier = getTier(result);
+              const cfg = tierConfig(tier);
+              const isExpanded = expandedId === result.citationId;
+              const source = sources.find(s => s.id === result.sourceId);
 
-                {/* Claim Context */}
-                {contextText && (
-                  <div className="bg-[#F6F8FB] p-2 rounded text-[11px] text-foreground-secondary italic border-l-2 border-border-light leading-relaxed">
-                    "{contextText}"
-                  </div>
-                )}
-
-                {/* Quick Status Grid */}
-                <div className="grid grid-cols-2 gap-x-2 gap-y-1.5 text-[11px] pt-1">
-                  <div className="flex flex-col">
-                    <span className="text-foreground-muted uppercase tracking-wider text-[9px] font-bold">Link</span>
-                    {renderDimensionStatus(result.linkage.status)}
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-foreground-muted uppercase tracking-wider text-[9px] font-bold">Identity</span>
-                    {renderDimensionStatus(result.sourceIdentity.status)}
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-foreground-muted uppercase tracking-wider text-[9px] font-bold">Bibliography</span>
-                    {renderDimensionStatus(result.bibliography.status)}
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-foreground-muted uppercase tracking-wider text-[9px] font-bold">Evidence</span>
-                    {renderDimensionStatus(result.evidenceAvailability.status)}
-                  </div>
-                </div>
-
-                {/* Claim Support — informational only */}
-                <div className="pt-2 border-t border-border-light mt-1">
-                  <span className="text-foreground-muted uppercase tracking-wider text-[9px] font-bold block mb-1">
-                    Claim Support
-                  </span>
-                  <span className="text-foreground-secondary font-medium">Not checked</span>
-                </div>
-
-                {/* View Details toggle */}
-                <div className="pt-2">
-                  <button
-                    onClick={() => setExpandedId(isExpanded ? null : result.citationId)}
-                    className="text-accent hover:underline text-[11px] flex items-center gap-1 font-medium"
-                  >
-                    {isExpanded ? 'Hide Details' : 'View Details'}
-                    <ChevronDown
-                      size={12}
-                      className={`transform transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-                    />
-                  </button>
-                </div>
-
-                {/* ── Expanded Detail Panel ── */}
-                {isExpanded && (
-                  <div className="mt-2 pt-3 border-t border-border-light space-y-4 bg-[#F6F8FB] -mx-3 -mb-3 p-3 rounded-b text-[11px]">
-
-                    {/* Overall Assessment */}
-                    <div>
-                      <span className="font-semibold text-foreground-secondary block mb-1.5">
-                        Overall Assessment
-                      </span>
-                      <OverallBadge overall={result.overall} />
-                      {result.reasons.length > 0 ? (
-                        <ul className="mt-2 space-y-1.5">
-                          {result.reasons.map(r => (
-                            <li key={r.code} className="flex gap-2 text-foreground-secondary leading-snug">
-                              <span className="mt-[1px] shrink-0">
-                                {r.severity === 'critical'
-                                  ? <ShieldAlert size={11} className="text-status-error" />
-                                  : <AlertTriangle size={11} className="text-status-warning" />}
-                              </span>
-                              {r.message}
-                            </li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <p className="mt-1 text-foreground-secondary leading-snug">
-                          No structural citation issues detected.
-                        </p>
-                      )}
-                    </div>
-
-                    {/* Citation Linkage */}
-                    <div>
-                      <span className="font-semibold text-foreground-secondary block mb-1">
-                        Citation Linkage
-                      </span>
-                      {renderDimensionStatus(result.linkage.status)}
-                      {result.linkage.reasons.length > 0 && (
-                        <ul className="mt-1.5 text-foreground-secondary list-disc pl-4 space-y-0.5">
-                          {result.linkage.reasons.map((r, i) => <li key={i}>{r}</li>)}
-                        </ul>
-                      )}
-                    </div>
-
-                    {/* Source Identity */}
-                    <div>
-                      <span className="font-semibold text-foreground-secondary block mb-1">
-                        Source Identity
-                      </span>
-                      {renderDimensionStatus(result.sourceIdentity.status)}
-                      {result.sourceIdentity.providers.length > 0 && (
-                        <p className="mt-1 text-foreground-secondary">
-                          {result.sourceIdentity.status === 'confirmed'
-                            ? `Verified across: ${result.sourceIdentity.providers.join(', ')}`
-                            : `Confirmed by: ${result.sourceIdentity.providers.join(', ')}`}
-                        </p>
-                      )}
-                      {result.sourceIdentity.providers.length === 0 &&
-                        result.sourceIdentity.status !== 'confirmed' && (
-                        <p className="mt-1 text-foreground-secondary">
-                          Independent provider confirmation not available.
-                        </p>
-                      )}
-                      {result.sourceIdentity.reasons.length > 0 && (
-                        <ul className="mt-1.5 text-foreground-secondary list-disc pl-4 space-y-0.5">
-                          {result.sourceIdentity.reasons.map((r, i) => <li key={i}>{r}</li>)}
-                        </ul>
-                      )}
-                    </div>
-
-                    {/* Bibliography */}
-                    <div>
-                      <span className="font-semibold text-foreground-secondary block mb-1">
-                        Bibliography
-                      </span>
-                      {renderDimensionStatus(result.bibliography.status)}
-                      {result.bibliography.reasons.length > 0 && (
-                        <ul className="mt-1.5 text-foreground-secondary list-disc pl-4 space-y-0.5">
-                          {result.bibliography.reasons.map((r, i) => <li key={i}>{r}</li>)}
-                        </ul>
-                      )}
-                    </div>
-
-                    {/* Evidence Availability */}
-                    <div>
-                      <span className="font-semibold text-foreground-secondary block mb-1">
-                        Evidence Availability
-                      </span>
-                      {renderDimensionStatus(result.evidenceAvailability.status)}
-                      <p className="mt-1 text-foreground-muted leading-snug">
-                        Evidence availability indicates what source material is accessible.
-                        It does not indicate claim support.
+              return (
+                <div
+                  key={result.citationId}
+                  className={`bg-white border rounded shadow-sm ${cfg.border}`}
+                >
+                  {/* Collapsed header */}
+                  <div className={`px-3 py-2.5 flex items-start gap-2 ${cfg.bg} border-b ${cfg.border}`}>
+                    <span className="shrink-0 mt-0.5">{cfg.icon}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-baseline gap-2 flex-wrap">
+                        <span className="text-[12px] font-semibold text-[#0B1628] truncate">
+                          {inlineLabel}
+                        </span>
+                        {source && (
+                          <span className="text-[11px] text-foreground-muted truncate">
+                            {source.title}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-foreground-secondary mt-0.5 leading-snug">
+                        {primaryH2Message(result)}
                       </p>
                     </div>
+                  </div>
 
-                    {/* Claim Support */}
-                    <div className="flex gap-2 p-2 bg-white/70 rounded border border-border-light">
-                      <Info size={12} className="text-foreground-muted shrink-0 mt-[1px]" />
-                      <div>
-                        <span className="font-semibold text-foreground-secondary block mb-0.5">
-                          Claim Support
-                        </span>
-                        <p className="text-foreground-secondary leading-snug">
-                          Verba has not yet evaluated whether this source supports the exact
-                          claim. Claim-level support checking will be available in future updates.
-                        </p>
+                  <div className="px-3 py-2 space-y-2">
+                    {/* Claim context snippet */}
+                    {contextText && (
+                      <div className="bg-[#F6F8FB] p-2 rounded text-[11px] text-foreground-secondary italic border-l-2 border-border-light leading-relaxed">
+                        "{contextText.slice(0, 180)}{contextText.length > 180 ? '…' : ''}"
                       </div>
+                    )}
+
+                    {/* Quick facts row */}
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
+                      <span className="text-foreground-muted">Evidence:</span>
+                      <EvidenceBadge result={result} />
+                      {result.claimSupport.status !== 'not_checked' && (
+                        <>
+                          <span className="text-foreground-muted">·</span>
+                          <span className="text-foreground-muted">Claim:</span>
+                          <ClaimSupportBadge result={result} />
+                        </>
+                      )}
+                      {result.claimSupport.temporalWarning && (
+                        <>
+                          <span className="text-foreground-muted">·</span>
+                          <span className="inline-flex items-center gap-0.5 text-status-warning text-[10px]">
+                            <Clock size={9} /> Time-sensitive
+                          </span>
+                        </>
+                      )}
+                      {result.topicRelevance.flagged && (
+                        <>
+                          <span className="text-foreground-muted">·</span>
+                          <span className="inline-flex items-center gap-0.5 text-status-warning text-[10px]">
+                            <Unlink2 size={9} /> May be unrelated
+                          </span>
+                        </>
+                      )}
                     </div>
 
+                    {/* Actions */}
+                    <ActionBar result={result} onNavigate={onNavigate} />
+
+                    {/* Technical details toggle */}
+                    <div className="pt-1">
+                      <button
+                        onClick={() => setExpandedId(isExpanded ? null : result.citationId)}
+                        className="text-accent hover:underline text-[10px] flex items-center gap-1 font-medium"
+                      >
+                        {isExpanded ? 'Hide details' : 'Technical details'}
+                        <ChevronDown
+                          size={11}
+                          className={`transform transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                        />
+                      </button>
+                    </div>
+
+                    {/* ── Expanded Technical Details ── */}
+                    {isExpanded && (
+                      <div className="mt-2 pt-3 border-t border-border-light space-y-3 bg-[#F6F8FB] -mx-3 -mb-2 p-3 rounded-b text-[11px]">
+
+                        {/* Claim context / atomic claims */}
+                        {result.claimScope && result.claimScope.atomicClaims.length > 1 && (
+                          <div>
+                            <span className="font-semibold text-foreground-secondary block mb-1">Claim analysis</span>
+                            {result.claimSupport.supportedParts.length > 0 && (
+                              <ul className="mb-1 space-y-0.5">
+                                {result.claimSupport.supportedParts.map((p, i) => (
+                                  <li key={i} className="flex gap-1 text-status-success"><CheckCircle size={10} className="shrink-0 mt-0.5" />{p}</li>
+                                ))}
+                              </ul>
+                            )}
+                            {result.claimSupport.unresolvedParts.length > 0 && (
+                              <ul className="space-y-0.5">
+                                {result.claimSupport.unresolvedParts.map((p, i) => (
+                                  <li key={i} className="flex gap-1 text-foreground-muted"><Info size={10} className="shrink-0 mt-0.5" />{p}</li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Claim detail message */}
+                        {result.claimSupport.detailMessage && (
+                          <div>
+                            <span className="font-semibold text-foreground-secondary block mb-1">Verba found</span>
+                            <p className="text-foreground-secondary leading-snug">{result.claimSupport.detailMessage}</p>
+                          </div>
+                        )}
+
+                        {/* Temporal warning */}
+                        {result.claimSupport.temporalWarning && (
+                          <div className="flex gap-2 p-2 bg-status-warning/10 rounded border border-status-warning/20">
+                            <Clock size={11} className="shrink-0 mt-0.5 text-status-warning" />
+                            <p className="text-foreground-secondary leading-snug">{result.claimSupport.temporalWarning}</p>
+                          </div>
+                        )}
+
+                        {/* Topic relevance */}
+                        <div>
+                          <span className="font-semibold text-foreground-secondary block mb-0.5">Topic relevance</span>
+                          <p className="text-foreground-secondary">{result.topicRelevance.reason}</p>
+                        </div>
+
+                        {/* Evidence passages */}
+                        <EvidencePassages result={result} />
+
+                        {/* H1 structural integrity */}
+                        <div className="space-y-2 pt-1 border-t border-border-light">
+                          <span className="font-semibold text-foreground-secondary block">Source details</span>
+                          <div className="grid grid-cols-2 gap-x-2 gap-y-1.5">
+                            {[
+                              ['Citation link', result.linkage.status],
+                              ['Source identity', result.sourceIdentity.status],
+                              ['Bibliography', result.bibliography.status],
+                              ['Evidence level', result.evidenceDetail?.label || result.evidenceAvailability.status],
+                            ].map(([label, val]) => (
+                              <div key={label} className="flex flex-col">
+                                <span className="text-[9px] uppercase tracking-wider font-bold text-foreground-muted">{label}</span>
+                                <span className="text-foreground-secondary capitalize">{val}</span>
+                              </div>
+                            ))}
+                          </div>
+                          {result.sourceIdentity.providers.length > 0 && (
+                            <p className="text-foreground-muted text-[10px]">
+                              Verified by: {result.sourceIdentity.providers.join(', ')}
+                            </p>
+                          )}
+                          {result.reasons.length > 0 && (
+                            <ul className="space-y-1">
+                              {result.reasons.map(r => (
+                                <li key={r.code} className="flex gap-1.5 text-foreground-secondary leading-snug">
+                                  <span className="shrink-0 mt-0.5">
+                                    {r.severity === 'critical'
+                                      ? <ShieldAlert size={10} className="text-status-error" />
+                                      : <AlertTriangle size={10} className="text-status-warning" />}
+                                  </span>
+                                  {r.message}
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
+                </div>
+              );
+            })}
+          </>
+        )}
+
+        {/* ── "Good" citations section ── */}
+        {good.length > 0 && (
+          <div className={`${needsAttention.length > 0 ? 'pt-2 border-t border-border-light mt-1' : ''}`}>
+            <div className="flex items-center justify-between">
+              <p className="text-[11px] text-status-success font-semibold flex items-center gap-1.5">
+                <CheckCircle size={12} />
+                {good.length} citation{good.length !== 1 ? 's' : ''} look good
+              </p>
+              <button
+                onClick={() => setShowGood(v => !v)}
+                className="text-[10px] text-accent hover:underline flex items-center gap-0.5"
+              >
+                {showGood ? 'Hide' : 'Show'}
+                <ChevronDown size={10} className={`transform transition-transform ${showGood ? 'rotate-180' : ''}`} />
+              </button>
             </div>
-          );
-        })}
+
+            {showGood && (
+              <div className="mt-2 space-y-2">
+                {good.map(({ result, inlineLabel }) => {
+                  const source = sources.find(s => s.id === result.sourceId);
+                  return (
+                    <div key={result.citationId} className="bg-white border border-status-success/20 rounded px-3 py-2 flex items-center gap-2">
+                      <CheckCircle size={12} className="text-status-success shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <span className="text-[12px] font-medium text-[#0B1628]">{inlineLabel}</span>
+                        {source && (
+                          <p className="text-[10px] text-foreground-muted truncate">{source.title}</p>
+                        )}
+                      </div>
+                      <EvidenceBadge result={result} />
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── All good / empty state ── */}
+        {needsAttention.length === 0 && good.length > 0 && (
+          <div className="flex flex-col items-center justify-center text-center py-6 text-foreground-secondary">
+            <CheckCircle size={28} className="text-status-success mb-2" />
+            <p className="text-[13px] font-semibold text-[#0B1628]">All citations look good.</p>
+            <p className="text-[12px] mt-1">No issues requiring your attention.</p>
+          </div>
+        )}
       </div>
     </div>
   );
