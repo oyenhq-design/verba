@@ -383,6 +383,25 @@ export default function WorkspacePage({ params }: { params: { documentId: string
     };
   }, []);
 
+  // ─── Refresh sources after Research saves a new source ──────────────────
+  // NOTE: must live here, before any early returns, to satisfy Rules of Hooks.
+  // doc may be null on first render; the callback guards with doc?.work_id.
+  const refreshSources = useCallback(async (newSource?: any) => {
+    if (!doc?.work_id) return;
+    if (newSource) {
+      // Optimistic: prepend the returned row immediately
+      setSources(prev => [newSource, ...prev]);
+      return;
+    }
+    // Fallback: full refetch
+    const { data } = await supabase
+      .from('work_sources')
+      .select('*')
+      .eq('work_id', doc.work_id)
+      .order('created_at', { ascending: false });
+    if (data) setSources(data);
+  }, [doc?.work_id, supabase]);
+
   // ─── Analysis ─────────────────────────────────────────────────────────────
 
   const handleAnalyze = async () => {
@@ -596,22 +615,6 @@ export default function WorkspacePage({ params }: { params: { documentId: string
     }
   };
 
-  // ─── Refresh sources after Research saves a new source ──────────────────
-  const refreshSources = useCallback(async (newSource?: any) => {
-    if (!doc?.work_id) return;
-    if (newSource) {
-      // Optimistic: prepend the returned row immediately
-      setSources(prev => [newSource, ...prev]);
-      return;
-    }
-    // Fallback: full refetch
-    const { data } = await supabase
-      .from('work_sources')
-      .select('*')
-      .eq('work_id', doc.work_id)
-      .order('created_at', { ascending: false });
-    if (data) setSources(data);
-  }, [doc?.work_id, supabase]);
 
   return (
     <CitationProvider sources={sources} style={citationStyle} documentCitations={documentCitations}>
