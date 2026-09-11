@@ -327,10 +327,12 @@ export function ResearchTab({ workId, onSourceSaved, evidenceSelection, onClearE
                     
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <span className="font-semibold text-foreground-secondary block mb-1">Provenance</span>
-                        <ul className="text-foreground-secondary list-disc pl-4">
-                          {r.provenance.providers.map(p => <li key={p}>{p}</li>)}
-                        </ul>
+                        <span className="font-semibold text-foreground-secondary block mb-1">
+                          {r.provenance.providers.length > 1 ? 'Verified across' : 'Found through'}
+                        </span>
+                        <div className="text-foreground-secondary">
+                          {r.provenance.providers.map(p => p === 'openalex' ? 'OpenAlex' : p === 'crossref' ? 'Crossref' : p).join(' + ')}
+                        </div>
                       </div>
                       <div>
                         <span className="font-semibold text-foreground-secondary block mb-1">Open Access</span>

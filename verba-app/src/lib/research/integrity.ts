@@ -73,10 +73,12 @@ export function calculateIdentity(
   else {
     if (providers.length >= 2) {
       status = 'confirmed';
-      reasons.push(`Identity confirmed by multiple providers (${providers.join(', ')})`);
+      const formatted = providers.map(p => p === 'openalex' ? 'OpenAlex' : p === 'crossref' ? 'Crossref' : p).join(' + ');
+      reasons.push(`Source identity was confirmed across multiple scholarly providers (${formatted})`);
     } else {
       status = 'partial';
-      reasons.push(`Identity relies on a single provider (${providers[0] || 'none'})`);
+      const formatted = providers.map(p => p === 'openalex' ? 'OpenAlex' : p === 'crossref' ? 'Crossref' : p)[0] || 'none';
+      reasons.push(`Source identity was found through one scholarly provider (${formatted})`);
     }
   }
 
@@ -89,40 +91,45 @@ export function calculateIdentity(
 }
 
 export function calculateRelevance(source: NormalizedSource, query: string): { status: RelevanceStatus, reasons: string[] } {
-  const qTokens = query.toLowerCase().replace(/[^\w\s]/g, '').split(/\s+/).filter(t => t.length > 2);
+  const qTokens = Array.from(new Set(query.toLowerCase().replace(/[^\w\s]/g, '').split(/\s+/).filter(t => t.length > 2)));
   if (qTokens.length === 0) return { status: 'unknown', reasons: [] };
 
   const reasons: string[] = [];
   let score = 0;
 
-  const tTokens = source.title ? source.title.toLowerCase().split(/\s+/) : [];
-  const titleMatches = qTokens.filter(q => tTokens.some(t => t.includes(q) || q.includes(t)));
+  const tTokens = source.title ? source.title.toLowerCase().replace(/[^\w\s]/g, '').split(/\s+/) : [];
+  const titleMatches = qTokens.filter(q => tTokens.includes(q));
   if (titleMatches.length > 0) {
     score += titleMatches.length * 3;
     reasons.push(`Title matches: ${titleMatches.join(', ')}`);
   }
 
-  if (source.abstract) {
-    const aTokens = source.abstract.toLowerCase().split(/\s+/);
-    const absMatches = qTokens.filter(q => aTokens.some(a => a.includes(q) || q.includes(a)));
-    if (absMatches.length > 0) {
-      score += absMatches.length * 2;
-      reasons.push(`Abstract matches: ${absMatches.join(', ')}`);
-    }
+  const aTokens = source.abstract ? source.abstract.toLowerCase().replace(/[^\w\s]/g, '').split(/\s+/) : [];
+  const absMatches = qTokens.filter(q => aTokens.includes(q));
+  if (absMatches.length > 0) {
+    score += absMatches.length * 2;
+    reasons.push(`Abstract matches: ${absMatches.join(', ')}`);
   }
 
   const topics = source.metadata?.topics as string[] | undefined;
+  const topicMatches = [];
   if (topics && topics.length > 0) {
-    const topicMatches = qTokens.filter(q => topics.some(t => t.toLowerCase().includes(q)));
+    for (const q of qTokens) {
+      if (topics.some(t => t.toLowerCase().replace(/[^\w\s]/g, '').split(/\s+/).includes(q))) {
+        topicMatches.push(q);
+      }
+    }
     if (topicMatches.length > 0) {
       score += topicMatches.length * 2;
       reasons.push(`Topic matches: ${topicMatches.join(', ')}`);
     }
   }
 
+  const uniqueMatched = new Set([...titleMatches, ...absMatches, ...topicMatches]);
+
   let status: RelevanceStatus = 'unknown';
-  if (score >= qTokens.length * 2) status = 'high';
-  else if (score >= qTokens.length) status = 'medium';
+  if (score >= qTokens.length * 2 && uniqueMatched.size >= Math.min(2, qTokens.length)) status = 'high';
+  else if (score >= qTokens.length && uniqueMatched.size >= 1) status = 'medium';
   else if (score > 0) status = 'low';
   else status = 'low';
 
