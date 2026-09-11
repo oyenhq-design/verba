@@ -26,6 +26,7 @@ import {
 } from '@/lib/citations/recovery';
 import { analyzeCandidate, rankCandidates, CandidateAnalysis } from '@/lib/citations/candidateMatch';
 import { extractClaimScope } from '@/lib/citations/scope';
+import { calculateRelevance } from '@/lib/research/integrity';
 
 const MAX_RESULTS_PER_QUERY = 10;
 const MAX_CANDIDATES_TO_ANALYZE = 8;
@@ -180,30 +181,35 @@ export async function POST(
     }
 
     // Map the deterministic fit labels to Evidence Relationships for the UI
-    const mapEvidenceRelationship = (fit: string) => {
+    const mapEvidenceRelationship = (fit: string, evidenceLevel: number) => {
+      // If we only have metadata (level 0), it can never be more than Related Research
+      if (evidenceLevel === 0) {
+        return {
+          relationship: 'Related Research',
+          conversationalText: 'This source is related to your topic, but the available evidence does not establish support for the specific claim.'
+        };
+      }
+
       switch (fit) {
         case 'likely_intended_source':
-          return {
-            relationship: 'Direct Support',
-            conversationalText: 'This source is highly relevant and appears to directly match the specifics of your claim.'
-          };
         case 'possible_supporting_source':
           return {
-            relationship: 'Supporting Evidence',
-            conversationalText: 'This looks like solid supporting evidence for the general topic.'
+            relationship: 'Potential Support',
+            conversationalText: 'The available abstract discusses several concepts in your claim. Check the source to confirm whether it supports the statement as written.'
           };
         case 'related_research':
         default:
           return {
             relationship: 'Related Research',
-            conversationalText: 'This paper is related, but you might need to check if it supports the exact details of your claim.'
+            conversationalText: 'This source is related to your topic, but the available evidence does not establish support for the specific claim.'
           };
       }
     };
 
     // 13. Serialize for client
     const candidates = finalRanked.map((c) => {
-      const evidenceData = mapEvidenceRelationship(c.fit);
+      const evidenceData = mapEvidenceRelationship(c.fit, c.evidenceLevel);
+      const computedRelevance = calculateRelevance(c.source, scope.candidateClaimText);
       
       return {
         source: c.source,
@@ -224,10 +230,7 @@ export async function POST(
           retraction: c.retracted ? 'retracted' : 'none',
           access: { status: c.evidenceLevel >= 2 ? 'open' : 'closed', pdf_url: c.sourceUrl },
           identity: { status: c.evidenceLevel >= 1 ? 'confirmed' : 'partial', reasons: [] },
-          relevance: { 
-            status: c.fit === 'likely_intended_source' ? 'high' : c.fit === 'possible_supporting_source' ? 'medium' : 'low',
-            reasons: c.matchedAspects.map(a => `Matches ${a.toLowerCase()}`)
-          },
+          relevance: computedRelevance,
           evidence_availability: c.evidenceCheckedLabel
         },
         provenance: { providers: c.providers, provider_ids: {}, provider_fields: {} }
