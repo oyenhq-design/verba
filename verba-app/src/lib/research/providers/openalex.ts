@@ -112,7 +112,15 @@ export async function lookupOpenAlexByDoi(doi: string, timeoutMs = 5000): Promis
   const id = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const url = `${OPENALEX_API_URL}/doi:${encodeURIComponent(normalized)}?mailto=${encodeURIComponent(USER_AGENT)}`;
+    const params = new URLSearchParams({
+      mailto: USER_AGENT,
+    });
+    
+    if (process.env.OPENALEX_API_KEY) {
+      params.set('api_key', process.env.OPENALEX_API_KEY);
+    }
+    
+    const url = `${OPENALEX_API_URL}/doi:${encodeURIComponent(normalized)}?${params.toString()}`;
     const res = await fetch(url, { signal: controller.signal });
     
     if (!res.ok) {
@@ -140,7 +148,17 @@ export async function searchOpenAlex(query: string, limit = 5, timeoutMs = 8000)
 
   try {
     // OpenAlex uses 'search' or 'default.search' for general queries
-    const url = `${OPENALEX_API_URL}?search=${encodeURIComponent(query)}&per-page=${limit}&mailto=${encodeURIComponent(USER_AGENT)}`;
+    const params = new URLSearchParams({
+      search: query,
+      'per-page': limit.toString(),
+      mailto: USER_AGENT,
+    });
+    
+    if (process.env.OPENALEX_API_KEY) {
+      params.set('api_key', process.env.OPENALEX_API_KEY);
+    }
+    
+    const url = `${OPENALEX_API_URL}?${params.toString()}`;
     const res = await fetch(url, { signal: controller.signal });
     
     if (!res.ok) {
