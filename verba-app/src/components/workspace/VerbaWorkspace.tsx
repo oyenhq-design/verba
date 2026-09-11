@@ -36,6 +36,9 @@ interface Props {
   editorHasFocus?: boolean;
   // Research Props
   onSourceSaved?: (newSource?: any) => void;
+  // Integrity / Recovery Props
+  onReplaceCitation?: (oldCitationId: string, candidateSource: any) => Promise<void>;
+  onAddSupportingCitation?: (oldCitationId: string, candidateSource: any) => Promise<void>;
 }
 
 export function VerbaWorkspace({
@@ -61,6 +64,8 @@ export function VerbaWorkspace({
   onInsertCitation,
   editorHasFocus,
   onSourceSaved,
+  onReplaceCitation,
+  onAddSupportingCitation,
 }: Props) {
   const [activeTab, setActiveTab] = useState<WorkspaceTab>('assistant');
 
@@ -131,6 +136,8 @@ export function VerbaWorkspace({
             documentId={documentId}
             workId={workId}
             onNavigate={(tab) => setActiveTab(tab)}
+            onReplaceCitation={onReplaceCitation}
+            onAddSupportingCitation={onAddSupportingCitation}
           />
         )}
         {activeTab === 'prove' && <ProvePanel documentId={documentId} />}

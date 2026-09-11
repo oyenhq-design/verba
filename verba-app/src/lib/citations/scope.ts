@@ -1,20 +1,69 @@
+/**
+ * scope.ts — Claim Scope Extraction
+ *
+ * Extracts the meaningful claim context around a citation node from
+ * the surrounding paragraph text provided by the DOM/editor.
+ *
+ * H2E update: added paragraphText (full cleaned paragraph) and
+ * candidateClaimText (paragraph with citation artefacts stripped),
+ * used for recovery fingerprinting and UI display.
+ */
+
 export type ClaimScope = {
   citationId: string;
   sourceId: string | null;
-  /** Sentence or immediate text fragment containing the citation node. */
+  /**
+   * Primary claim sentence (first sentence of the paragraph,
+   * after stripping citation artefacts).
+   */
   sentence: string;
-  /** Surrounding paragraph context (max 300 chars). */
+  /**
+   * Full cleaned paragraph context (up to 600 chars), with
+   * citation artefact text stripped. Used for UI display.
+   */
   paragraphContext: string;
+  /**
+   * Full paragraph with citation rendering artefacts removed.
+   * Used for recovery fingerprinting and query generation.
+   * May be up to ~800 chars.
+   */
+  candidateClaimText: string;
   /** Atomic claims extracted from the sentence (if multi-clause). */
   atomicClaims: string[];
   /** Deterministic SHA/fingerprint hash of normalized claim text + citationId + sourceId. */
   claimHash: string;
 };
 
+// ─── Citation Artefact Stripping ──────────────────────────────────────────────
+
+/**
+ * Strips inline citation rendering artefacts from paragraph text.
+ *
+ * Handles:
+ *   APA:   (Author, 2020)  (Author et al., 2020)  (Author & Other, 2020)
+ *   IEEE:  [1]  [1, 2]  [12]
+ *   Generic: (Baladi, 2017) (Smith et al., 2019; Jones, 2020)
+ */
+function stripCitationArtefacts(text: string): string {
+  // APA-style: (Anything, 4-digit-year) or (Anything; Anything, year)
+  let cleaned = text.replace(/\([^()]{1,120},\s*\d{4}[a-z]?(;\s*[^();]{1,80},\s*\d{4}[a-z]?)*\)/g, '');
+  // IEEE-style: [1] or [1, 2] or [12]
+  cleaned = cleaned.replace(/\[\d+(?:,\s*\d+)*\]/g, '');
+  // Collapse extra whitespace
+  cleaned = cleaned.replace(/\s{2,}/g, ' ').trim();
+  return cleaned;
+}
+
+// ─── Hash ─────────────────────────────────────────────────────────────────────
+
 /**
  * Simple deterministic string hash for claim text fingerprinting.
  */
-export function generateClaimHash(claimText: string, citationId: string, sourceId: string | null): string {
+export function generateClaimHash(
+  claimText: string,
+  citationId: string,
+  sourceId: string | null
+): string {
   const str = `${citationId}:${sourceId || 'none'}:${claimText.trim().toLowerCase().replace(/\s+/g, ' ')}`;
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
@@ -25,8 +74,17 @@ export function generateClaimHash(claimText: string, citationId: string, sourceI
   return `hash_${Math.abs(hash).toString(36)}`;
 }
 
+// ─── Extractor ────────────────────────────────────────────────────────────────
+
 /**
- * Extracts sentence context and atomic propositions around a citation node.
+ * Extracts sentence context, full paragraph, and atomic propositions
+ * around a citation node.
+ *
+ * @param citationId  The citation node's ID attribute.
+ * @param sourceId    The source ID the citation points to.
+ * @param fullText    The raw text content of the surrounding paragraph
+ *                    (from DOM parentElement.textContent or editor state).
+ *                    May contain rendered citation artefacts like "(Author, 2020)".
  */
 export function extractClaimScope(
   citationId: string,
@@ -39,21 +97,32 @@ export function extractClaimScope(
       sourceId,
       sentence: '',
       paragraphContext: '',
+      candidateClaimText: '',
       atomicClaims: [],
       claimHash: generateClaimHash('', citationId, sourceId),
     };
   }
 
-  const cleaned = fullText.trim();
-  // Find sentence containing citation or split by period/exclamation/question mark
+  // Strip citation artefacts for recovery and display purposes
+  const cleaned = stripCitationArtefacts(fullText.trim());
+
+  // candidateClaimText = full cleaned paragraph (for fingerprinting/query generation)
+  const candidateClaimText = cleaned.slice(0, 800);
+
+  // paragraphContext = cleaned paragraph, clipped for display (600 chars)
+  const paragraphContext = cleaned.slice(0, 600);
+
+  // Primary sentence: first sentence of cleaned text
+  // Split on sentence-ending punctuation followed by whitespace
   const sentences = cleaned.split(/(?<=[.!?])\s+/).filter(s => s.trim().length > 0);
-  
-  // Use full block or primary sentence
   const primarySentence = sentences.length > 0 ? sentences[0] : cleaned;
-  
-  // Extract atomic claims if sentence has multi-clause items (e.g., lists with commas, and, or semicolon)
+
+  // Extract atomic claims if sentence has multi-clause items
   const atomicClaims: string[] = [];
-  const parts = primarySentence.split(/[,;]|\band\b|\bwhile\b|\bwhereas\b/i).map(p => p.trim()).filter(p => p.length > 10);
+  const parts = primarySentence
+    .split(/[;]|\band\b|\bwhile\b|\bwhereas\b/i)
+    .map(p => p.trim())
+    .filter(p => p.length > 10);
 
   if (parts.length > 1) {
     atomicClaims.push(...parts);
@@ -61,13 +130,16 @@ export function extractClaimScope(
     atomicClaims.push(primarySentence);
   }
 
-  const claimHash = generateClaimHash(primarySentence, citationId, sourceId);
+  // Hash over the full candidateClaimText for better stale detection
+  // (if only one sentence changed in a methodology paragraph, we want to detect it)
+  const claimHash = generateClaimHash(candidateClaimText, citationId, sourceId);
 
   return {
     citationId,
     sourceId,
     sentence: primarySentence,
-    paragraphContext: cleaned.slice(0, 300),
+    paragraphContext,
+    candidateClaimText,
     atomicClaims,
     claimHash,
   };

@@ -11,6 +11,7 @@ import { VerbaWorkspace } from '@/components/workspace/VerbaWorkspace';
 import { DocumentEditor, ContextualSelection } from '@/components/DocumentEditor';
 import { Editor } from '@tiptap/react';
 import { CitationProvider } from '@/components/workspace/CitationContext';
+import { buildReplaceCitationCommand, buildAddSupportingCitationCommand } from '@/lib/citations/replace';
 import { BibliographyPreview } from '@/components/workspace/BibliographyPreview';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -116,6 +117,9 @@ export default function WorkspacePage({ params }: { params: { documentId: string
 
   // Editor Focus State for Citation insertion
   const [editorHasFocus, setEditorHasFocus] = useState(false);
+
+  // Toast notification state
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Autosave preference — null = still loading (prevents premature autosave)
   const [autosaveEnabled, setAutosaveEnabled] = useState<boolean | null>(null);
@@ -617,6 +621,7 @@ export default function WorkspacePage({ params }: { params: { documentId: string
 
 
   return (
+    <>
     <CitationProvider sources={sources} style={citationStyle} documentCitations={documentCitations}>
     <div className="flex h-full bg-[#F6F8FB] overflow-hidden relative">
       {/* 2. Left Panel: Document Outline */}
@@ -847,9 +852,152 @@ export default function WorkspacePage({ params }: { params: { documentId: string
               alert(err.message);
             }
           }}
+          onReplaceCitation={async (oldCitationId: string, candidateSource: any) => {
+            if (!editorRef.current || !doc?.work_id) return;
+            const editor = editorRef.current;
+            try {
+              // Step 1: Save candidate source or reuse existing
+              let finalSourceId: string;
+              const saveRes = await fetch(`/api/works/${doc.work_id}/sources`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(candidateSource),
+              });
+              const saveData = await saveRes.json();
+
+              if (saveRes.status === 409 && saveData.sourceId) {
+                // Source already exists — reuse
+                finalSourceId = saveData.sourceId;
+              } else if (!saveRes.ok) {
+                throw new Error(saveData.error || 'Failed to save source');
+              } else {
+                finalSourceId = saveData.id;
+                // Optimistic update sources list
+                refreshSources(saveData);
+              }
+
+              // Step 2: Create new document_citations row → get new citationId
+              const citRes = await fetch(`/api/documents/${params.documentId}/citations`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ work_source_id: finalSourceId }),
+              });
+              const citData = await citRes.json();
+              if (!citRes.ok) throw new Error(citData.error || 'Failed to create citation');
+
+              const { citationId: newCitationId } = citData;
+
+              // Step 3: Replace citation node by citationId (Undo/Redo safe)
+              try {
+                const replaced = editor.commands.command(
+                  buildReplaceCitationCommand(oldCitationId, newCitationId, finalSourceId)
+                );
+
+                if (!replaced) {
+                  throw new Error('Could not locate the citation in the document.');
+                }
+              } catch (cmdErr: any) {
+                await fetch(`/api/documents/${params.documentId}/citations/${newCitationId}`, { method: 'DELETE' }).catch(() => {});
+                throw cmdErr;
+              }
+
+              // Step 4: Log event (fire and forget)
+              fetch(`/api/documents/${params.documentId}/events`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  event_type: 'citation_replaced',
+                  metadata: { old_citation_id: oldCitationId, new_citation_id: newCitationId, new_source_id: finalSourceId }
+                }),
+              }).catch(() => {});
+
+              // Step 5: Show toast (set state used by toast component)
+              setToastMessage('Citation updated');
+              setTimeout(() => setToastMessage(null), 3000);
+
+            } catch (err: any) {
+              console.error('[replaceCitation]', err);
+              alert(err.message);
+            }
+          }}
+          onAddSupportingCitation={async (oldCitationId: string, candidateSource: any) => {
+            if (!editorRef.current || !doc?.work_id) return;
+            const editor = editorRef.current;
+            try {
+              let finalSourceId: string;
+              const saveRes = await fetch(`/api/works/${doc.work_id}/sources`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(candidateSource),
+              });
+              const saveData = await saveRes.json();
+
+              if (saveRes.status === 409 && saveData.sourceId) {
+                finalSourceId = saveData.sourceId;
+              } else if (!saveRes.ok) {
+                throw new Error(saveData.error || 'Failed to save source');
+              } else {
+                finalSourceId = saveData.id;
+                refreshSources(saveData);
+              }
+
+              const citRes = await fetch(`/api/documents/${params.documentId}/citations`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ work_source_id: finalSourceId }),
+              });
+              const citData = await citRes.json();
+              if (!citRes.ok) throw new Error(citData.error || 'Failed to create citation');
+
+              const { citationId: newCitationId } = citData;
+
+              try {
+                const added = editor.commands.command(
+                  buildAddSupportingCitationCommand(oldCitationId, newCitationId, finalSourceId)
+                );
+
+                if (!added) {
+                  throw new Error('Could not locate the citation in the document.');
+                }
+              } catch (cmdErr: any) {
+                await fetch(`/api/documents/${params.documentId}/citations/${newCitationId}`, { method: 'DELETE' }).catch(() => {});
+                
+                if (cmdErr.message === 'Already cited here') {
+                  setToastMessage('Already cited here');
+                  setTimeout(() => setToastMessage(null), 3000);
+                  return;
+                }
+                throw cmdErr;
+              }
+
+              fetch(`/api/documents/${params.documentId}/events`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  event_type: 'citation_inserted',
+                  metadata: { citation_id: newCitationId, source_id: finalSourceId }
+                }),
+              }).catch(() => {});
+
+              setToastMessage('Supporting citation added');
+              setTimeout(() => setToastMessage(null), 3000);
+
+            } catch (err: any) {
+              console.error('[addSupportingCitation]', err);
+              alert(err.message);
+            }
+          }}
         />
       )}
     </div>
     </CitationProvider>
+    {/* ── Toast ── */}
+    {toastMessage && (
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-[#0B1628] text-white text-[13px] font-medium px-4 py-2.5 rounded-lg shadow-lg flex items-center gap-2 animate-fade-in">
+        <CheckCircle size={14} className="text-status-success" />
+        {toastMessage}
+      </div>
+    )}
+  </>
   );
 }
