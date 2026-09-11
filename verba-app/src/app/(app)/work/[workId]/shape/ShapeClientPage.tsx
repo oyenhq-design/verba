@@ -78,13 +78,13 @@ const CONTEXT_FIELD_CONFIG: Record<string, FieldConfig> = {
   institution_requirements: { label: 'Institution requirements', group: 'Requirements', order: 53 },
   course_requirements: { label: 'Course requirements', group: 'Requirements', order: 54 },
   
-  planned_sections: { label: 'Planned sections', group: 'Structure', order: 60 }
+  proposed_outline: { label: 'Proposed outline', group: 'Structure', order: 60 }
 };
 
 const GROUP_ORDER = ['Project', 'Direction', 'Approach', 'Requirements', 'Structure'];
 
 const TEXTAREA_FIELDS = new Set(['problem', 'aim', 'scope', 'methodology', 'focus', 'context_summary', 'research_design', 'analysis_approach', 'literature_gap']);
-const LIST_FIELDS = new Set(['objectives', 'tools', 'constraints', 'research_questions', 'hypotheses', 'main_arguments', 'counterarguments', 'variables', 'data_requirements', 'data_sources', 'assumptions', 'limitations', 'evidence_needs', 'literature_themes', 'planned_sections']);
+const LIST_FIELDS = new Set(['objectives', 'tools', 'constraints', 'research_questions', 'hypotheses', 'main_arguments', 'counterarguments', 'variables', 'data_requirements', 'data_sources', 'assumptions', 'limitations', 'evidence_needs', 'literature_themes']);
 const BOOLEAN_FIELDS = new Set(['economic_analysis']);
 
 export function ShapeClientPage({ workId, initialTitle, initialContext, initialReadiness }: Props) {
@@ -150,7 +150,7 @@ export function ShapeClientPage({ workId, initialTitle, initialContext, initialR
   };
 
   const handleMoveListItem = (field: string, index: number, direction: 'up' | 'down') => {
-    const currentList = [...((context[field] as string[]) || [])];
+    const currentList = [...((context[field] as any[]) || [])];
     if (direction === 'up' && index > 0) {
       const temp = currentList[index - 1];
       currentList[index - 1] = currentList[index];
@@ -162,6 +162,17 @@ export function ShapeClientPage({ workId, initialTitle, initialContext, initialR
       currentList[index] = temp;
       handleListChange(field, currentList);
     }
+  };
+
+  const handleUpdateOutlineItem = (index: number, key: string, value: string) => {
+    const currentList = [...((context['proposed_outline'] as any[]) || [])];
+    currentList[index] = { ...currentList[index], [key]: value };
+    handleListChange('proposed_outline', currentList);
+  };
+
+  const handleAddOutlineItem = () => {
+    const currentList = [...((context['proposed_outline'] as any[]) || [])];
+    handleListChange('proposed_outline', [...currentList, { title: '', description: '', status: 'pending' }]);
   };
 
   const saveChanges = async () => {
@@ -244,7 +255,54 @@ export function ShapeClientPage({ workId, initialTitle, initialContext, initialR
               onClick={() => handleAddListItem(field)}
               className="flex items-center gap-1 text-[13px] font-medium text-accent hover:text-accent-hover mt-2"
             >
-              <Plus size={14} /> {field === 'planned_sections' ? 'Add section' : 'Add item'}
+              <Plus size={14} /> Add item
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    if (field === 'proposed_outline') {
+      const list = (context[field] as any[]) || [];
+      return (
+        <div key={field} className="mb-6">
+          <label className="block text-[14px] font-semibold text-[#334155] mb-2">{label}</label>
+          <div className="space-y-4">
+            {list.map((item, idx) => (
+              <div key={idx} className="flex items-start gap-3 group bg-white border border-[#E2E8F0] p-4 rounded-xl shadow-sm">
+                <div className="flex flex-col gap-1 mt-1 text-[#94A3B8] opacity-0 group-hover:opacity-100 transition-opacity">
+                   <button onClick={() => handleMoveListItem(field, idx, 'up')} disabled={idx === 0} className="hover:text-accent disabled:opacity-30">↑</button>
+                   <button onClick={() => handleMoveListItem(field, idx, 'down')} disabled={idx === list.length - 1} className="hover:text-accent disabled:opacity-30">↓</button>
+                </div>
+                <div className="flex-1 space-y-3">
+                  <input
+                    type="text"
+                    value={item.title || ''}
+                    onChange={(e) => handleUpdateOutlineItem(idx, 'title', e.target.value)}
+                    className="w-full px-3 py-2 border border-[#E2E8F0] rounded-md focus:outline-none focus:border-accent text-[14px] font-semibold"
+                    placeholder="Section title"
+                  />
+                  <textarea
+                    value={item.description || ''}
+                    onChange={(e) => handleUpdateOutlineItem(idx, 'description', e.target.value)}
+                    rows={2}
+                    className="w-full px-3 py-2 border border-[#E2E8F0] rounded-md focus:outline-none focus:border-accent text-[13px] text-[#475569] resize-none"
+                    placeholder="What will this section cover?"
+                  />
+                </div>
+                <button 
+                  onClick={() => handleRemoveListItem(field, idx)}
+                  className="p-2 text-[#94A3B8] hover:text-red-500 hover:bg-red-50 rounded-md transition-colors shrink-0"
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
+            ))}
+            <button 
+              onClick={() => handleAddOutlineItem()}
+              className="flex items-center gap-1 text-[13px] font-medium text-accent hover:text-accent-hover mt-2"
+            >
+              <Plus size={14} /> Add section
             </button>
           </div>
         </div>
@@ -378,7 +436,7 @@ export function ShapeClientPage({ workId, initialTitle, initialContext, initialR
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2">
                     {keys.map(field => (
-                      <div key={field} className={TEXTAREA_FIELDS.has(field) || LIST_FIELDS.has(field) ? 'md:col-span-2' : ''}>
+                      <div key={field} className={TEXTAREA_FIELDS.has(field) || LIST_FIELDS.has(field) || field === 'proposed_outline' ? 'md:col-span-2' : ''}>
                         {renderField(field)}
                       </div>
                     ))}
@@ -453,21 +511,21 @@ export function ShapeClientPage({ workId, initialTitle, initialContext, initialR
                   </div>
                 )}
 
-                {Array.isArray(context.planned_sections) && context.planned_sections.length > 0 && (
+                {Array.isArray(context.proposed_outline) && context.proposed_outline.length > 0 && (
                   <div>
                     <span className="text-[12px] font-bold text-[#64748B] uppercase tracking-wider block mb-2">Structure</span>
                     <ul className="space-y-1.5">
-                      {(context.planned_sections as string[]).slice(0, 5).map((section: string, idx: number) => (
+                      {(context.proposed_outline as any[]).slice(0, 5).map((section: any, idx: number) => (
                         <li key={idx} className="text-[14px] text-[#0F172A] font-medium flex items-center gap-2">
                           <span className="text-[#94A3B8] w-5 text-right font-mono text-[12px]">
                             {String(idx + 1).padStart(2, '0')}
                           </span> 
-                          {section}
+                          {section.title}
                         </li>
                       ))}
-                      {(context.planned_sections as string[]).length > 5 && (
+                      {(context.proposed_outline as any[]).length > 5 && (
                         <li className="text-[13px] text-[#64748B] italic pl-7">
-                          + {(context.planned_sections as string[]).length - 5} more sections
+                          + {(context.proposed_outline as any[]).length - 5} more sections
                         </li>
                       )}
                     </ul>

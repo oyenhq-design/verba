@@ -32,12 +32,25 @@ export async function POST(request: Request) {
     // 1. Verify document ownership via RLS
     const { data: docData, error: docError } = await supabase
       .from('documents')
-      .select('id')
+      .select('id, work_id')
       .eq('id', documentId)
       .single();
 
     if (docError || !docData) {
       return NextResponse.json({ error: 'Document not found or unauthorized' }, { status: 404 });
+    }
+
+    let projectContext = {};
+    if (docData.work_id) {
+      const { data: work } = await supabase
+        .from('works')
+        .select('context')
+        .eq('id', docData.work_id)
+        .single();
+      
+      if (work?.context) {
+        projectContext = work.context;
+      }
     }
 
     // Resolve engine URL once — fail fast if missing in production
@@ -86,6 +99,7 @@ export async function POST(request: Request) {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            project_context: projectContext,
             context: context,
             paragraph_text: block.text,
           }),

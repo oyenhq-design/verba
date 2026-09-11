@@ -1,15 +1,19 @@
 import React, { useState } from 'react';
-import { Search, Loader2, BookOpen, ExternalLink, ShieldAlert, CheckCircle, AlertTriangle, ChevronDown, Plus } from 'lucide-react';
+import { Search, Loader2, BookOpen, ExternalLink, ShieldAlert, CheckCircle, AlertTriangle, ChevronDown, Plus, Sparkles } from 'lucide-react';
 import { useCitationContext } from './CitationContext';
 import { ResearchResult } from '@/lib/research/types';
 import { NormalizedSource } from '@/lib/sources/types';
+import { ContextualSelection } from '../DocumentEditor';
 
 interface ResearchTabProps {
   workId: string | null;
   onSourceSaved?: (newSource?: any) => void;
+  evidenceSelection?: ContextualSelection | null;
+  onClearEvidenceSelection?: () => void;
+  onInsertCitation?: (sourceId: string) => void;
 }
 
-export function ResearchTab({ workId, onSourceSaved }: ResearchTabProps) {
+export function ResearchTab({ workId, onSourceSaved, evidenceSelection, onClearEvidenceSelection, onInsertCitation }: ResearchTabProps) {
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<ResearchResult[]>([]);
@@ -59,6 +63,40 @@ export function ResearchTab({ workId, onSourceSaved }: ResearchTabProps) {
     }
   };
 
+  React.useEffect(() => {
+    if (evidenceSelection && workId) {
+      const fetchEvidence = async () => {
+        setLoading(true);
+        setErrorMsg('');
+        setResults([]);
+        setProviderStatus(null);
+        setExpandedId(null);
+        
+        try {
+          const res = await fetch(`/api/works/${workId}/research/evidence`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              selected_claim: evidenceSelection.originalText,
+              paragraph_context: evidenceSelection.paragraphText
+            })
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Failed to find evidence');
+          
+          setResults(data.results || []);
+          setProviderStatus(data.providerStatus || null);
+        } catch (err: any) {
+          setErrorMsg(err.message);
+        } finally {
+          setLoading(false);
+        }
+      };
+      
+      fetchEvidence();
+    }
+  }, [evidenceSelection, workId]);
+
   const handleSave = async (result: ResearchResult) => {
     // Generate a temporary ID for tracking saving state if DOI is missing
     const trackId = result.source.doi || result.source.title;
@@ -93,10 +131,30 @@ export function ResearchTab({ workId, onSourceSaved }: ResearchTabProps) {
       setSavedIds(prev => new Set(prev).add(trackId));
       // Notify parent so CitationProvider context is updated immediately
       onSourceSaved?.(data);
+      return data.id; // Return the saved source ID
     } catch (err: any) {
       alert(err.message);
+      return null;
     } finally {
       setSavingId(null);
+    }
+  };
+
+  const handleCite = async (result: ResearchResult) => {
+    const trackId = result.source.doi || result.source.title;
+    // Attempt to save first
+    let sourceId: string | null = null;
+    if (!savedIds.has(trackId)) {
+      sourceId = await handleSave(result);
+    } else {
+      // If already saved, we need its real ID. Since we didn't store it, we might need a better map, 
+      // but for now onInsertCitation in Citations handles DOIs implicitly or we can just pass the trackId if the backend can resolve it.
+      // Wait, onInsertCitation needs a real sourceId. Let's just call handleSave anyway (it handles duplicates).
+      sourceId = await handleSave(result);
+    }
+
+    if (sourceId && onInsertCitation) {
+      onInsertCitation(sourceId);
     }
   };
 
@@ -139,6 +197,26 @@ export function ResearchTab({ workId, onSourceSaved }: ResearchTabProps) {
         {errorMsg && (
           <div className="mt-2 text-[12px] text-status-error">{errorMsg}</div>
         )}
+        
+        {evidenceSelection && (
+          <div className="mt-3 p-3 bg-accent/5 border border-accent/20 rounded relative text-[12px]">
+            <button 
+              onClick={onClearEvidenceSelection}
+              className="absolute top-2 right-2 text-foreground-muted hover:text-foreground-secondary transition-colors"
+              title="Clear evidence search"
+            >
+              <Loader2 size={14} className="hidden" /> 
+              &times;
+            </button>
+            <span className="font-semibold text-accent flex items-center gap-1.5 mb-1">
+              <Sparkles size={12} />
+              Looking for evidence for
+            </span>
+            <p className="text-[#0B1628] leading-relaxed italic border-l-2 border-accent/30 pl-2">
+              "{evidenceSelection.originalText}"
+            </p>
+          </div>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
@@ -171,6 +249,15 @@ export function ResearchTab({ workId, onSourceSaved }: ResearchTabProps) {
                 )}
 
                 <div>
+                  {r.relationship && (
+                    <div className="mb-2 p-2 bg-accent/5 border border-accent/20 rounded flex items-start gap-2">
+                      <div className="mt-0.5 text-accent"><Sparkles size={14} /></div>
+                      <div>
+                        <span className="font-semibold text-accent block">{r.relationship}</span>
+                        <span className="text-foreground-secondary">{r.conversationalText}</span>
+                      </div>
+                    </div>
+                  )}
                   <h4 className="font-semibold text-[#0B1628] leading-tight mb-1">{r.source.title}</h4>
                   <div className="text-foreground-secondary text-[12px]">
                     {r.source.authors.map(a => `${a.given} ${a.family}`).join(', ')}
@@ -205,16 +292,27 @@ export function ResearchTab({ workId, onSourceSaved }: ResearchTabProps) {
                   >
                     {isExpanded ? 'Hide Details' : 'Show Details'} <ChevronDown size={12} className={`transform transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                   </button>
-                  <button
-                    onClick={() => handleSave(r)}
-                    disabled={isSaved || isSaving}
-                    className={`h-7 px-3 rounded text-[11px] font-medium flex items-center gap-1.5 transition-colors ${
-                      isSaved ? 'bg-status-success/10 text-status-success' : 'bg-accent text-white hover:bg-accent-hover'
-                    }`}
-                  >
-                    {isSaving ? <Loader2 size={12} className="animate-spin" /> : isSaved ? <CheckCircle size={12} /> : <Plus size={12} />}
-                    {isSaving ? 'Saving...' : isSaved ? 'Saved to Library' : 'Save Source'}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleSave(r)}
+                      disabled={isSaved || isSaving}
+                      className={`h-7 px-3 rounded text-[11px] font-medium flex items-center gap-1.5 transition-colors ${
+                        isSaved ? 'bg-status-success/10 text-status-success' : 'bg-[#E5EAF0] text-[#0B1628] hover:bg-border-light'
+                      }`}
+                    >
+                      {isSaving ? <Loader2 size={12} className="animate-spin" /> : isSaved ? <CheckCircle size={12} /> : <Plus size={12} />}
+                      {isSaving ? 'Saving...' : isSaved ? 'Saved' : 'Save'}
+                    </button>
+                    {onInsertCitation && (
+                      <button
+                        onClick={() => handleCite(r)}
+                        disabled={isSaving}
+                        className="h-7 px-3 rounded text-[11px] font-medium flex items-center gap-1.5 bg-accent text-white hover:bg-accent-hover transition-colors"
+                      >
+                        Cite Source
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {/* Expanded Details */}

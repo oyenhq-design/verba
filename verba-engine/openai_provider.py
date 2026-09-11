@@ -16,14 +16,17 @@ class OpenAIProvider(WritingModelProvider):
         self.model = "gpt-4o-mini"
         logger.info("OpenAIProvider initialized with model=%s", self.model)
 
-    def analyze_paragraph(self, context: str, paragraph_text: str) -> dict:
+    def analyze_paragraph(self, project_context: dict, context: str, paragraph_text: str) -> dict:
         prompt = f"""You are an expert writing refinement assistant. Your task is to identify genuine writing problems in the provided paragraph.
 Do not rewrite text merely to make it different. If a paragraph is already well-written, clearly written, and flows well, return needs_revision = false.
 
 Check for: wordiness, overly_formal, repetition, clarity, generic_phrase, weak_transition, redundancy, sentence_monotony, vagueness, passive_voice, tone_inconsistency.
 Do not change: facts, numbers, percentages, citations, names, references, technical terminology, URLs, quotes, equations, units.
 
-Context (for understanding only):
+Project Context:
+{json.dumps(project_context, indent=2)}
+
+Surrounding Context (for understanding only):
 {context}
 
 Target Paragraph to analyze:
@@ -60,8 +63,14 @@ Return JSON strictly following this schema:
             logger.warning("JSON decode failed in analyze_paragraph: %s", exc)
             return {"needs_revision": False, "issues": []}
 
-    def generate_alternative(self, context: str, paragraph_text: str, issue: dict) -> dict:
+    def generate_alternative(self, project_context: dict, context: str, paragraph_text: str, issue: dict) -> dict:
         prompt = f"""You are an expert writing refinement assistant. Provide an alternative suggestion for a writing issue previously identified.
+
+Project Context:
+{json.dumps(project_context, indent=2)}
+
+Surrounding Context:
+{context}
 
 Target Paragraph:
 {paragraph_text}
@@ -120,11 +129,15 @@ Respond in JSON matching exactly this schema:
 {{
   "message": "string (your conversational reply)",
   "suggested_replies": ["string", "string", "string"],
+  "suggested_directions": [
+    // If the project is still very rough, suggest 2-3 interactive directions to help them narrow it down.
+    {{ "title": "string (concise direction)", "description": "string (what this direction entails)" }}
+  ],
   "context_updates": {{
     // Extract context updates based on the conversation. Only include fields that have been clarified.
     // If you determine the work type, output it as "work_type" (e.g., "final_year_project", "essay", "research_paper").
     // As the project becomes clearer, synthesize a concise "direction_summary" and "approach_summary".
-    // Map out proposed sections into "planned_sections" (array of strings) if the user is ready to structure it.
+    // If the user wants a document plan/structure, generate "proposed_outline" (array of {{ "title": "string", "description": "string", "status": "pending" }}).
   }},
   "stage_suggestion": "string (developing, shaping) or null"
 }}"""

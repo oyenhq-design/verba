@@ -11,7 +11,7 @@ const ALLOWED_CONTEXT_KEYS = new Set([
   'assumptions', 'limitations', 'constraints', 'evidence_needs', 'literature_themes',
   'literature_gap', 'citation_style', 'target_length', 'deadline', 'institution_requirements',
   'course_requirements', 'technical_focus', 'economic_analysis', 'validation_approach',
-  'focus', 'planned_sections', 'context_summary', 'direction_summary', 'approach_summary'
+  'focus', 'planned_sections', 'proposed_outline', 'context_summary', 'direction_summary', 'approach_summary'
 ]);
 
 export async function POST(
@@ -199,6 +199,7 @@ export async function POST(
     return NextResponse.json({
       verbaMessage: verbaMessageRecord,
       suggestedReplies: Array.isArray(engineResponse.suggested_replies) ? engineResponse.suggested_replies.slice(0, 4) : [],
+      suggestedDirections: Array.isArray(engineResponse.suggested_directions) ? engineResponse.suggested_directions : [],
       context: updatedContext,
       title: nextTitle,
       readiness: engineResponse.readiness || { can_plan: false, missing: [] }

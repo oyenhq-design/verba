@@ -117,7 +117,11 @@ export async function POST(
 
     // Build the structure based on context
     let mainSections: string[] = [];
-    if (context.planned_sections && Array.isArray(context.planned_sections) && context.planned_sections.length > 0) {
+    if (context.proposed_outline && Array.isArray(context.proposed_outline) && context.proposed_outline.length > 0) {
+      mainSections = context.proposed_outline
+        .map((s: any) => (typeof s === 'object' && s !== null ? s.title : s))
+        .filter(Boolean);
+    } else if (context.planned_sections && Array.isArray(context.planned_sections) && context.planned_sections.length > 0) {
       mainSections = [...context.planned_sections];
     } else {
       const typeStr = (context.work_type || '').toLowerCase();

@@ -49,11 +49,13 @@ provider = OpenAIProvider()
 
 
 class AnalyzeRequest(BaseModel):
+    project_context: Dict[str, Any] = {}
     context: str = ""
     paragraph_text: str
 
 
 class AlternativeRequest(BaseModel):
+    project_context: Dict[str, Any] = {}
     context: str = ""
     paragraph_text: str
     issue: Dict[str, Any]
@@ -72,9 +74,15 @@ class DevelopRequest(BaseModel):
     message: str
 
 
+class SuggestedDirection(BaseModel):
+    title: str
+    description: str
+
+
 class DevelopResponse(BaseModel):
     message: str
     suggested_replies: list[str] = []
+    suggested_directions: list[SuggestedDirection] = []
     context_updates: Dict[str, Any] = {}
     stage_suggestion: str | None = None
     readiness: Dict[str, Any] = {}
@@ -112,7 +120,7 @@ async def parse_docx(file: UploadFile = File(...)):
 async def analyze_block(req: AnalyzeRequest):
     """Analyzes a block of text for writing issues."""
     try:
-        result = provider.analyze_paragraph(req.context, req.paragraph_text)
+        result = provider.analyze_paragraph(req.project_context, req.context, req.paragraph_text)
 
         # Filter issues by safety validation
         safe_issues = []
@@ -195,7 +203,7 @@ async def analyze_block(req: AnalyzeRequest):
 async def analyze_alternative(req: AlternativeRequest):
     """Generates an alternative suggestion for a block."""
     try:
-        result = provider.generate_alternative(req.context, req.paragraph_text, req.issue)
+        result = provider.generate_alternative(req.project_context, req.context, req.paragraph_text, req.issue)
 
         original = req.issue.get("original_text", "")
         suggested = result.get("suggested_text", "")

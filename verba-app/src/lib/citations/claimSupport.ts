@@ -95,21 +95,34 @@ export function classifyClaimType(sentence: string): ClaimType {
  */
 export function evaluateTopicRelevance(
   source: NormalizedSource,
-  claimScope: ClaimScope
+  claimScope: ClaimScope,
+  projectContext?: Record<string, unknown>
 ): TopicRelevanceResult {
   const claimText = claimScope.sentence.toLowerCase().replace(/[^\w\s]/g, '');
   const claimTokens = claimText.split(/\s+/).filter(t => t.length > 3);
 
-  if (claimTokens.length === 0) {
-    return { status: 'unknown', reason: 'Not enough claim text to assess relevance.', flagged: false };
+  let projectTokens: string[] = [];
+  if (projectContext) {
+    const pText = [
+      projectContext.topic,
+      projectContext.focus,
+      projectContext.methodology,
+      ...(Array.isArray(projectContext.objectives) ? projectContext.objectives : [])
+    ].filter(Boolean).join(' ').toLowerCase().replace(/[^\w\s]/g, '');
+    projectTokens = pText.split(/\s+/).filter(t => t.length > 3);
+  }
+
+  if (claimTokens.length === 0 && projectTokens.length === 0) {
+    return { status: 'unknown', reason: 'Not enough text to assess relevance.', flagged: false };
   }
 
   let score = 0;
   const matchedTerms: string[] = [];
+  const searchTokens = Array.from(new Set([...claimTokens, ...projectTokens]));
 
   // Check source title
   const titleTokens = (source.title || '').toLowerCase().replace(/[^\w\s]/g, '').split(/\s+/);
-  for (const token of claimTokens) {
+  for (const token of searchTokens) {
     if (titleTokens.some(t => t.includes(token) || token.includes(t))) {
       score += 3;
       matchedTerms.push(token);
@@ -119,7 +132,7 @@ export function evaluateTopicRelevance(
   // Check abstract
   if (source.abstract) {
     const abstractTokens = source.abstract.toLowerCase().replace(/[^\w\s]/g, '').split(/\s+/);
-    for (const token of claimTokens) {
+    for (const token of searchTokens) {
       if (!matchedTerms.includes(token) && abstractTokens.some(a => a.includes(token) || token.includes(a))) {
         score += 2;
         matchedTerms.push(token);
@@ -130,7 +143,7 @@ export function evaluateTopicRelevance(
   // Check topics/concepts from OpenAlex metadata
   const topics = source.metadata?.topics as string[] | undefined;
   if (topics && topics.length > 0) {
-    for (const token of claimTokens) {
+    for (const token of searchTokens) {
       if (!matchedTerms.includes(token) && topics.some(t => t.toLowerCase().includes(token))) {
         score += 2;
         matchedTerms.push(token);

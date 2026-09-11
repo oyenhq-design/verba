@@ -36,6 +36,7 @@ export function DevelopChat({ workId, initialMessages, initialTitle, stage, onCo
   const [input, setInput] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [suggestedReplies, setSuggestedReplies] = useState<string[]>([]);
+  const [suggestedDirections, setSuggestedDirections] = useState<{title: string, description: string}[]>([]);
   const [error, setError] = useState<string | null>(null);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -61,6 +62,7 @@ export function DevelopChat({ workId, initialMessages, initialTitle, stage, onCo
     setMessages((prev) => [...prev, userMessage]);
     setInput('');
     setSuggestedReplies([]);
+    setSuggestedDirections([]);
     setIsSubmitting(true);
     setError(null);
 
@@ -94,6 +96,10 @@ export function DevelopChat({ workId, initialMessages, initialTitle, stage, onCo
       if (data.suggestedReplies) {
         setSuggestedReplies(data.suggestedReplies);
       }
+      
+      if (data.suggestedDirections) {
+        setSuggestedDirections(data.suggestedDirections);
+      }
 
       if (data.context) {
         onContextUpdate(data.context, data.title || initialTitle, data.readiness);
@@ -116,6 +122,7 @@ export function DevelopChat({ workId, initialMessages, initialTitle, stage, onCo
     setIsSubmitting(true);
     setError(null);
     setSuggestedReplies([]);
+    setSuggestedDirections([]);
 
     try {
       const res = await fetch(`/api/works/${workId}/develop`, {
@@ -141,6 +148,10 @@ export function DevelopChat({ workId, initialMessages, initialTitle, stage, onCo
       
       if (data.suggestedReplies) {
         setSuggestedReplies(data.suggestedReplies);
+      }
+      
+      if (data.suggestedDirections) {
+        setSuggestedDirections(data.suggestedDirections);
       }
 
       if (data.context) {
@@ -272,6 +283,21 @@ export function DevelopChat({ workId, initialMessages, initialTitle, stage, onCo
       {/* Input Area */}
       <div className="p-4 border-t border-[#E5EAF0] bg-white shrink-0">
         <div className="max-w-4xl mx-auto">
+          {suggestedDirections.length > 0 && !isSubmitting && !error && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
+              {suggestedDirections.map((direction, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => handleSubmit(`Let's go with: ${direction.title}. ${direction.description}`)}
+                  className="flex flex-col text-left p-4 bg-white border border-accent/30 rounded-[12px] hover:bg-accent/5 hover:border-accent transition-colors shadow-sm"
+                >
+                  <span className="font-semibold text-[#0F172A] text-[14px] mb-1">{direction.title}</span>
+                  <span className="text-[#64748B] text-[13px] leading-snug line-clamp-2">{direction.description}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
           {suggestedReplies.length > 0 && !isSubmitting && !error && (
             <div className="flex flex-wrap gap-2 mb-4">
               {suggestedReplies.map((reply, idx) => (

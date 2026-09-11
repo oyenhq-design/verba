@@ -106,11 +106,13 @@ export default function WorkspacePage({ params }: { params: { documentId: string
 
   // Contextual Assistant
   const [contextualSelection, setContextualSelection] = useState<ContextualSelection | null>(null);
+  const [evidenceSelection, setEvidenceSelection] = useState<ContextualSelection | null>(null);
 
   // Citation Data
   const [sources, setSources] = useState<any[]>([]);
   const [citationStyle, setCitationStyle] = useState<'apa' | 'ieee'>('apa');
   const [documentCitations, setDocumentCitations] = useState<{ citationId: string; sourceId: string }[]>([]);
+  const [projectContext, setProjectContext] = useState<Record<string, unknown> | undefined>(undefined);
 
   // Live word count (updated on every save)
   const [liveWordCount, setLiveWordCount] = useState<number | null>(null);
@@ -200,8 +202,11 @@ export default function WorkspacePage({ params }: { params: { documentId: string
           .eq('id', docData.work_id)
           .single();
         
-        if (workData?.context?.citation_style) {
-          setCitationStyle(workData.context.citation_style);
+        if (workData?.context) {
+          setProjectContext(workData.context);
+          if (workData.context.citation_style) {
+            setCitationStyle(workData.context.citation_style);
+          }
         }
 
         // Fetch Work Sources
@@ -770,6 +775,13 @@ export default function WorkspacePage({ params }: { params: { documentId: string
                 setContextualSelection(sel);
                 setIsWorkspaceOpen(true);
                 setActiveIssueId(null);
+                setEvidenceSelection(null);
+              }}
+              onFindEvidence={(sel) => {
+                setEvidenceSelection(sel);
+                setIsWorkspaceOpen(true);
+                setActiveIssueId(null);
+                setContextualSelection(null);
               }}
             />
             <BibliographyPreview />
@@ -781,12 +793,14 @@ export default function WorkspacePage({ params }: { params: { documentId: string
         <VerbaWorkspace
           documentId={params.documentId}
           onClose={() => setIsWorkspaceOpen(false)}
-          blockId={activeIssue?.block_id || contextualSelection?.blockId || ''}
-          paragraphText={activeBlockText || contextualSelection?.paragraphText || ''}
+          blockId={activeIssue?.block_id || contextualSelection?.blockId || evidenceSelection?.blockId || ''}
+          paragraphText={activeBlockText || contextualSelection?.paragraphText || evidenceSelection?.paragraphText || ''}
           issues={issues}
           issue={activeIssue as unknown as typeof activeIssue}
           contextualSelection={contextualSelection}
           onClearContextualSelection={() => setContextualSelection(null)}
+          evidenceSelection={evidenceSelection}
+          onClearEvidenceSelection={() => setEvidenceSelection(null)}
           onIssueSelect={(id) => {
             selectIssue(id);
             if (id) setContextualSelection(null);
@@ -807,6 +821,7 @@ export default function WorkspacePage({ params }: { params: { documentId: string
             selectIssue(issueId);
           }}
           workId={doc.work_id || null}
+          projectContext={projectContext}
           editorHasFocus={editorHasFocus}
           onSourceSaved={refreshSources}
           onInsertCitation={async (sourceId) => {

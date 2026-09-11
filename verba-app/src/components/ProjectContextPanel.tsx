@@ -72,7 +72,7 @@ const CONTEXT_FIELD_CONFIG: Record<string, FieldConfig> = {
   institution_requirements: { label: 'Institution requirements', group: 'Requirements', order: 53 },
   course_requirements: { label: 'Course requirements', group: 'Requirements', order: 54 },
   
-  planned_sections: { label: 'Planned sections', group: 'Structure', order: 60 }
+  proposed_outline: { label: 'Proposed outline', group: 'Structure', order: 60 }
 };
 
 const GROUP_ORDER = ['Project', 'Direction', 'Approach', 'Requirements', 'Structure'];
@@ -96,9 +96,20 @@ export function ProjectContextPanel({ context, initialIdea, readiness, onContinu
       if (value.length === 0) return null;
       return (
         <ul className="list-disc pl-4 space-y-1">
-          {value.map((item, idx) => (
-            <li key={idx} className="text-[#101828]">{item}</li>
-          ))}
+          {value.map((item, idx) => {
+            if (typeof item === 'object' && item !== null) {
+              const outlineItem = item as { title?: string; description?: string; status?: string };
+              if (outlineItem.title) {
+                return (
+                  <li key={idx} className="text-[#101828]">
+                    <strong>{outlineItem.title}</strong>
+                    {outlineItem.description && <span className="text-[#475569] block text-[13px]">{outlineItem.description}</span>}
+                  </li>
+                );
+              }
+            }
+            return <li key={idx} className="text-[#101828]">{String(item)}</li>;
+          })}
         </ul>
       );
     }

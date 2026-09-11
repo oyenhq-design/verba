@@ -147,7 +147,7 @@ export function classifyRecoveryMode(scope: ClaimScope): RecoveryMode {
 
 // ─── Study Fingerprint Extraction ─────────────────────────────────────────────
 
-export function extractStudyFingerprint(scope: ClaimScope): StudyFingerprint {
+export function extractStudyFingerprint(scope: ClaimScope, projectContext?: Record<string, any>): StudyFingerprint {
   const text = scope.candidateClaimText || scope.paragraphContext;
 
   const matchAll = (pattern: RegExp, t: string): string[] => {
@@ -205,6 +205,25 @@ export function extractStudyFingerprint(scope: ClaimScope): StudyFingerprint {
 
   // Distinctive phrases: known compound instrument/test names
   const distinctivePhrases: string[] = [...instruments];
+
+  // If projectContext is provided, use it to boost topic terms or locations
+  if (projectContext) {
+    if (projectContext.methodology && typeof projectContext.methodology === 'string') {
+      const projMeth = matchAll(STAT_METHOD_PATTERNS, projectContext.methodology);
+      for (const m of projMeth) if (!statisticalMethods.includes(m)) statisticalMethods.push(m);
+      const projDesign = matchAll(STUDY_DESIGN_PATTERNS, projectContext.methodology);
+      for (const d of projDesign) if (!studyDesign.includes(d)) studyDesign.push(d);
+    }
+    if (projectContext.geography && typeof projectContext.geography === 'string') {
+      if (!locations.includes(projectContext.geography)) locations.push(projectContext.geography);
+    }
+    if (projectContext.topic && typeof projectContext.topic === 'string') {
+      const topWords = projectContext.topic.toLowerCase().replace(/[^a-z0-9\s-]/g, ' ').split(/\s+/).filter(w => w.length > 4 && !STOP_WORDS.has(w));
+      for (const w of topWords) {
+        if (!topicTerms.includes(w)) topicTerms.unshift(w); // unshift to give higher priority in query generation
+      }
+    }
+  }
 
   return {
     topicTerms,

@@ -19,6 +19,8 @@ interface Props {
   issue: Issue | null;
   contextualSelection?: ContextualSelection | null;
   onClearContextualSelection?: () => void;
+  evidenceSelection?: ContextualSelection | null;
+  onClearEvidenceSelection?: () => void;
   onIssueSelect?: (id: string | null) => void;
   onSuggestionAction: (issueId: string, suggestionId: string, action: 'accepted' | 'rejected' | 'manually_edited', newText?: string) => void;
   onCloseIssue: () => void;
@@ -32,6 +34,7 @@ interface Props {
   onIssueCreated?: (issueId: string) => void;
   // Cite Props
   workId: string | null;
+  projectContext?: Record<string, unknown>;
   onInsertCitation?: (sourceId: string) => void;
   editorHasFocus?: boolean;
   // Research Props
@@ -50,6 +53,8 @@ export function VerbaWorkspace({
   issue,
   contextualSelection,
   onClearContextualSelection,
+  evidenceSelection,
+  onClearEvidenceSelection,
   onIssueSelect,
   onSuggestionAction,
   onCloseIssue,
@@ -61,6 +66,7 @@ export function VerbaWorkspace({
   analyzeError,
   onIssueCreated,
   workId,
+  projectContext,
   onInsertCitation,
   editorHasFocus,
   onSourceSaved,
@@ -68,6 +74,12 @@ export function VerbaWorkspace({
   onAddSupportingCitation,
 }: Props) {
   const [activeTab, setActiveTab] = useState<WorkspaceTab>('assistant');
+
+  React.useEffect(() => {
+    if (evidenceSelection) {
+      setActiveTab('research');
+    }
+  }, [evidenceSelection]);
 
   return (
     <aside className="w-[340px] bg-white border-l border-border-light shrink-0 flex flex-col h-full relative z-20 shadow-[-4px_0_24px_rgba(0,0,0,0.02)] md:shadow-none transition-all duration-300">
@@ -110,6 +122,7 @@ export function VerbaWorkspace({
             docStatus={docStatus}
             analyzeError={analyzeError}
             onIssueCreated={onIssueCreated}
+            projectContext={projectContext}
           />
         )}
         {activeTab === 'review' && (
@@ -122,7 +135,15 @@ export function VerbaWorkspace({
             analyzeError={analyzeError}
           />
         )}
-        {activeTab === 'research' && <ResearchTab workId={workId} onSourceSaved={onSourceSaved} />}
+        {activeTab === 'research' && (
+          <ResearchTab 
+            workId={workId} 
+            onSourceSaved={onSourceSaved} 
+            evidenceSelection={evidenceSelection}
+            onClearEvidenceSelection={onClearEvidenceSelection}
+            onInsertCitation={onInsertCitation}
+          />
+        )}
         {activeTab === 'cite' && (
           <CiteTab 
             documentId={documentId} 
@@ -135,6 +156,7 @@ export function VerbaWorkspace({
           <CitationIntegrityTab 
             documentId={documentId}
             workId={workId}
+            projectContext={projectContext}
             onNavigate={(tab) => setActiveTab(tab)}
             onReplaceCitation={onReplaceCitation}
             onAddSupportingCitation={onAddSupportingCitation}

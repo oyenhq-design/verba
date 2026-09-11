@@ -38,6 +38,30 @@ export async function POST(request: Request) {
 
     const previousSuggestionText = prevSuggestion ? prevSuggestion.suggested_text : '';
 
+    // 1. Fetch document and work_id
+    const { data: docData, error: docError } = await supabase
+      .from('documents')
+      .select('work_id')
+      .eq('id', documentId)
+      .single();
+
+    if (docError || !docData) {
+      return NextResponse.json({ error: 'Document not found or unauthorized' }, { status: 404 });
+    }
+
+    let projectContext = {};
+    if (docData.work_id) {
+      const { data: work } = await supabase
+        .from('works')
+        .select('context')
+        .eq('id', docData.work_id)
+        .single();
+      
+      if (work?.context) {
+        projectContext = work.context;
+      }
+    }
+
     // Call Python Engine
     let engineUrl = process.env.VERBA_ENGINE_URL;
     if (!engineUrl) {
@@ -53,6 +77,7 @@ export async function POST(request: Request) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        project_context: projectContext,
         context: "", // We can omit context for alternative generation or fetch it
         paragraph_text: paragraphText,
         issue: {

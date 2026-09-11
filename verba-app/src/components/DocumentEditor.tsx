@@ -8,7 +8,7 @@ import TextAlign from '@tiptap/extension-text-align';
 import { EditorToolbar } from './EditorToolbar';
 import { VerbaBlockId, IssueHighlight, IssueProp } from './editor/EditorExtensions';
 import { Citation } from './editor/extensions/Citation';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, Search } from 'lucide-react';
 
 export interface ContextualSelection {
   blockId: string;
@@ -46,6 +46,7 @@ interface DocumentEditorProps {
   /** Called with the latest Tiptap JSON whenever the document changes (for autosave) */
   onUpdate?: (json: TiptapJson) => void;
   onAskVerba?: (selection: ContextualSelection) => void;
+  onFindEvidence?: (selection: ContextualSelection) => void;
   onFocus?: () => void;
   onBlur?: () => void;
 }
@@ -93,6 +94,7 @@ export function DocumentEditor({
   onEditorReady,
   onUpdate,
   onAskVerba,
+  onFindEvidence,
   onFocus,
   onBlur,
 }: DocumentEditorProps) {
@@ -232,42 +234,79 @@ export function DocumentEditor({
                 return from !== to && !editor.isActive('image');
               }}
             >
-              <button
-                onClick={() => {
-                  const { from, to } = editor.state.selection;
-                  const text = editor.state.doc.textBetween(from, to, ' ');
-                  
-                  let blockId = '';
-                  let paragraphText = '';
-                  let blockStart = 0;
-                  
-                  editor.state.doc.descendants((node, pos) => {
-                    // Only looking for block level nodes that contain the selection
-                    if (pos <= from && pos + node.nodeSize >= to) {
-                      if (node.attrs.verbaBlockId) {
-                        blockId = node.attrs.verbaBlockId;
-                        paragraphText = node.textContent;
-                        blockStart = pos + 1;
-                        return false;
+              <div className="flex bg-[#0B1628] border border-[#213555] shadow-lg rounded-md overflow-hidden">
+                <button
+                  onClick={() => {
+                    const { from, to } = editor.state.selection;
+                    const text = editor.state.doc.textBetween(from, to, ' ');
+                    
+                    let blockId = '';
+                    let paragraphText = '';
+                    let blockStart = 0;
+                    
+                    editor.state.doc.descendants((node, pos) => {
+                      if (pos <= from && pos + node.nodeSize >= to) {
+                        if (node.attrs.verbaBlockId) {
+                          blockId = node.attrs.verbaBlockId;
+                          paragraphText = node.textContent;
+                          blockStart = pos + 1;
+                          return false;
+                        }
                       }
-                    }
-                  });
-                  
-                  if (blockId && onAskVerba) {
-                    onAskVerba({
-                      blockId,
-                      paragraphText,
-                      originalText: text,
-                      startOffset: from - blockStart,
-                      endOffset: to - blockStart
                     });
-                  }
-                }}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-[#0B1628] border border-[#213555] shadow-lg rounded-md text-[13px] font-medium text-white hover:bg-accent hover:border-accent transition-colors"
-              >
-                <Sparkles size={14} className="text-white" />
-                Ask Verba
-              </button>
+                    
+                    if (blockId && onAskVerba) {
+                      onAskVerba({
+                        blockId,
+                        paragraphText,
+                        originalText: text,
+                        startOffset: from - blockStart,
+                        endOffset: to - blockStart
+                      });
+                    }
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-[13px] font-medium text-white hover:bg-accent transition-colors"
+                >
+                  <Sparkles size={14} className="text-white" />
+                  Ask Verba
+                </button>
+                <div className="w-[1px] bg-[#213555]" />
+                <button
+                  onClick={() => {
+                    const { from, to } = editor.state.selection;
+                    const text = editor.state.doc.textBetween(from, to, ' ');
+                    
+                    let blockId = '';
+                    let paragraphText = '';
+                    let blockStart = 0;
+                    
+                    editor.state.doc.descendants((node, pos) => {
+                      if (pos <= from && pos + node.nodeSize >= to) {
+                        if (node.attrs.verbaBlockId) {
+                          blockId = node.attrs.verbaBlockId;
+                          paragraphText = node.textContent;
+                          blockStart = pos + 1;
+                          return false;
+                        }
+                      }
+                    });
+                    
+                    if (blockId && onFindEvidence) {
+                      onFindEvidence({
+                        blockId,
+                        paragraphText,
+                        originalText: text,
+                        startOffset: from - blockStart,
+                        endOffset: to - blockStart
+                      });
+                    }
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-[13px] font-medium text-white hover:bg-accent transition-colors"
+                >
+                  <Search size={14} className="text-white" />
+                  Find evidence
+                </button>
+              </div>
             </BubbleMenu>
           )}
           <EditorContent editor={editor} />

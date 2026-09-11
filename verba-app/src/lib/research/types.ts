@@ -46,4 +46,11 @@ export interface ResearchResult {
   source: NormalizedSource;
   integrity: SourceIntegrity;
   provenance: ProviderProvenance;
+  
+  // Optional fields added during Evidence Mode
+  fit?: string;
+  relationship?: string;
+  conversationalText?: string;
+  matchedAspects?: string[];
+  unmatchedAspects?: string[];
 }

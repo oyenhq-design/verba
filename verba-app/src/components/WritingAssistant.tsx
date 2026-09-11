@@ -39,6 +39,7 @@ interface Props {
   docStatus?: string;
   analyzeError?: string | null;
   onIssueCreated?: (issueId: string) => void;
+  projectContext?: Record<string, unknown>;
 }
 
 export function WritingAssistant({ 
@@ -56,7 +57,8 @@ export function WritingAssistant({
   issuesCount = 0, 
   docStatus = '', 
   analyzeError = null,
-  onIssueCreated
+  onIssueCreated,
+  projectContext
 }: Props) {
   const [loadingAlternative, setLoadingAlternative] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -108,7 +110,8 @@ export function WritingAssistant({
           blockId: contextualSelection.blockId,
           paragraphText: contextualSelection.paragraphText,
           originalText: contextualSelection.originalText,
-          userInstruction: instruction
+          userInstruction: instruction,
+          projectContext
         })
       });
 

@@ -15,6 +15,7 @@ import { CandidateAnalysis, CandidateFit } from '@/lib/citations/candidateMatch'
 interface Props {
   documentId: string;
   workId: string | null;
+  projectContext?: Record<string, unknown>;
   onNavigate: (tab: WorkspaceTab) => void;
   onReplaceCitation?: (oldCitationId: string, candidateSource: any) => Promise<void>;
   onAddSupportingCitation?: (oldCitationId: string, candidateSource: any) => Promise<void>;
@@ -520,7 +521,7 @@ function RecoveryPanel({
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export function CitationIntegrityTab({ documentId, workId, onNavigate, onReplaceCitation, onAddSupportingCitation }: Props) {
+export function CitationIntegrityTab({ documentId, workId, projectContext, onNavigate, onReplaceCitation, onAddSupportingCitation }: Props) {
   const { sources, style, documentCitations } = useCitationContext();
   const [evaluations, setEvaluations] = useState<EvaluatedCitation[]>([]);
   const [showGood, setShowGood] = useState(false);
@@ -548,6 +549,7 @@ export function CitationIntegrityTab({ documentId, workId, onNavigate, onReplace
         style,
         contextText || undefined,
         prevHash || undefined,
+        projectContext
       );
 
       if (result.claimScope?.claimHash) {
@@ -560,7 +562,7 @@ export function CitationIntegrityTab({ documentId, workId, onNavigate, onReplace
       return { result, contextText, inlineLabel, prevHash };
     });
     setEvaluations(newEvals);
-  }, [documentCitations, sources, style]);
+  }, [documentCitations, sources, style, projectContext]);
 
   // ── Guards ─────────────────────────────────────────────────────────────────
   if (!workId) {

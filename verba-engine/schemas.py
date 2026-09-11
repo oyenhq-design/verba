@@ -4,42 +4,42 @@ WORK_TYPE_SCHEMAS = {
     "final_year_project": {
         "label": "Final-year project",
         "core": ["working_title", "problem", "aim", "objectives", "scope", "methodology"],
-        "optional": ["research_questions", "data_requirements", "analysis_approach", "tools", "geography", "assumptions", "limitations", "citation_style", "planned_sections"]
+        "optional": ["research_questions", "data_requirements", "analysis_approach", "tools", "geography", "assumptions", "limitations", "citation_style", "proposed_outline"]
     },
     "research_project": {
         "label": "Research project",
         "core": ["working_title", "problem", "aim", "research_questions", "methodology"],
-        "optional": ["objectives", "scope", "data_requirements", "analysis_approach", "tools", "limitations", "citation_style", "planned_sections"]
+        "optional": ["objectives", "scope", "data_requirements", "analysis_approach", "tools", "limitations", "citation_style", "proposed_outline"]
     },
     "research_paper": {
         "label": "Research paper",
         "core": ["working_title", "topic", "problem", "methodology"],
-        "optional": ["hypotheses", "data_sources", "analysis_approach", "limitations", "literature_gap", "citation_style", "planned_sections", "target_length"]
+        "optional": ["hypotheses", "data_sources", "analysis_approach", "limitations", "literature_gap", "citation_style", "proposed_outline", "target_length"]
     },
     "dissertation": {
         "label": "Dissertation",
         "core": ["working_title", "problem", "aim", "research_questions", "methodology", "scope"],
-        "optional": ["objectives", "data_requirements", "analysis_approach", "limitations", "literature_themes", "citation_style", "planned_sections"]
+        "optional": ["objectives", "data_requirements", "analysis_approach", "limitations", "literature_themes", "citation_style", "proposed_outline"]
     },
     "essay": {
         "label": "Essay",
         "core": ["working_title", "topic", "position", "main_arguments"],
-        "optional": ["counterarguments", "evidence_needs", "citation_style", "planned_sections", "target_length"]
+        "optional": ["counterarguments", "evidence_needs", "citation_style", "proposed_outline", "target_length"]
     },
     "technical_report": {
         "label": "Technical report",
         "core": ["working_title", "topic", "problem", "aim", "methodology"],
-        "optional": ["scope", "tools", "assumptions", "constraints", "validation_approach", "planned_sections"]
+        "optional": ["scope", "tools", "assumptions", "constraints", "validation_approach", "proposed_outline"]
     },
     "professional_report": {
         "label": "Professional report",
         "core": ["working_title", "topic", "aim"],
-        "optional": ["problem", "scope", "methodology", "constraints", "planned_sections"]
+        "optional": ["problem", "scope", "methodology", "constraints", "proposed_outline"]
     },
     "general_document": {
         "label": "General document",
         "core": ["working_title", "topic", "aim"],
-        "optional": ["problem", "scope", "focus", "planned_sections"]
+        "optional": ["problem", "scope", "focus", "proposed_outline"]
     }
 }
 
@@ -84,7 +84,7 @@ def calculate_readiness(work_type_raw: str, context: Dict[str, Any]) -> Dict[str
             missing_optional.append(field)
             
     is_ready = len(missing_core) == 0
-    structure_ready = is_value_defined(context.get("planned_sections"))
+    structure_ready = is_value_defined(context.get("proposed_outline"))
 
     direction_summary = context.get("direction_summary", "")
     approach_summary = context.get("approach_summary", "")

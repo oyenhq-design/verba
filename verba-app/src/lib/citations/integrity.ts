@@ -189,7 +189,9 @@ export function evaluateCitationIntegrity(
   /** Sentence/paragraph text around the citation node, from DOM or editor state. */
   contextText?: string,
   /** Previously computed claim hash — used to detect stale analysis. */
-  previousClaimHash?: string
+  previousClaimHash?: string,
+  /** Full project context from the work record. */
+  projectContext?: Record<string, unknown>
 ): CitationIntegrityResult {
   const result: CitationIntegrityResult = {
     citationId,
@@ -337,7 +339,7 @@ export function evaluateCitationIntegrity(
         : 'full_text_available';
 
     // H2A: Topic Relevance (separate from H1 search relevance)
-    const relevance = evaluateTopicRelevance(source, scope);
+    const relevance = evaluateTopicRelevance(source, scope, projectContext);
     result.topicRelevance = relevance;
     if (relevance.flagged) {
       result.warnings.push('Source may be unrelated to the cited statement.');
