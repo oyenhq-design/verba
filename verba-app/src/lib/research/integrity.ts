@@ -137,7 +137,13 @@ export function calculateRelevance(source: NormalizedSource, query: string): { s
 }
 
 export function calculateEvidence(source: NormalizedSource): EvidenceStatus {
-  // Check lawful full text signals from OpenAlex metadata
+  // Check locations array for full text
+  if (source.locations && source.locations.length > 0) {
+    const hasFullText = source.locations.some(l => l.content_type === 'pdf' || l.content_type === 'html_full_text');
+    if (hasFullText) return 'full_text_available';
+  }
+
+  // Fallback: Check lawful full text signals from OpenAlex metadata
   if (source.metadata?.open_access) {
     const oa = source.metadata.open_access as any;
     if (oa.is_oa && oa.oa_url) return 'full_text_available';
@@ -153,6 +159,27 @@ export function extractAccess(source: NormalizedSource): { status: AccessStatus,
   let landing_page_url = source.url || null;
   let pdf_url = null;
 
+  // Use locations array if available
+  if (source.locations && source.locations.length > 0) {
+    const openLoc = source.locations.find(l => l.access_status === 'open');
+    const closedLoc = source.locations.find(l => l.access_status === 'closed');
+    const pdfLoc = source.locations.find(l => l.content_type === 'pdf');
+    const htmlLoc = source.locations.find(l => l.content_type === 'html_full_text');
+    const landingLoc = source.locations.find(l => l.location_type === 'publisher' || l.location_type === 'doi_landing_page');
+    
+    if (openLoc) status = 'open';
+    else if (closedLoc) status = 'closed';
+
+    if (pdfLoc) pdf_url = pdfLoc.url;
+    if (landingLoc) landing_page_url = landingLoc.url;
+    else if (htmlLoc) landing_page_url = htmlLoc.url;
+    
+    // We extracted from locations, we can return early or allow metadata to override? 
+    // Usually locations are better since they are explicitly mapped.
+    return { status, landing_page_url, pdf_url };
+  }
+
+  // Fallback logic
   if (source.metadata?.open_access) {
     const oa = source.metadata.open_access as any;
     if (oa.is_oa) {

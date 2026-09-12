@@ -411,51 +411,78 @@ type SourceWithProvenance = {
 export function deduplicateCandidates(
   candidates: { source: NormalizedSource; provider: string }[]
 ): SourceWithProvenance[] {
-  const byDoi = new Map<string, SourceWithProvenance>();
-  const byTitleYear: SourceWithProvenance[] = [];
+  const groups: SourceWithProvenance[] = [];
+
+  const mergeProvenance = (existing: SourceWithProvenance, newSource: NormalizedSource, provider: string) => {
+    if (!existing.providers.includes(provider)) {
+      existing.providers.push(provider);
+    }
+    if (!existing.source.abstract && newSource.abstract) {
+      existing.source = { ...existing.source, abstract: newSource.abstract };
+    }
+    existing.source = {
+      ...existing.source,
+      metadata: { ...newSource.metadata, ...existing.source.metadata },
+    };
+    
+    // Combine arrays
+    const allIdentifiers = [...(existing.source.identifiers || []), ...(newSource.identifiers || [])];
+    const uniqueIdentifiers = Array.from(new Map(allIdentifiers.map(i => [`${i.identifier_type}:${i.normalized_value}`, i])).values());
+    existing.source.identifiers = uniqueIdentifiers;
+
+    const allLocations = [...(existing.source.locations || []), ...(newSource.locations || [])];
+    const uniqueLocations = Array.from(new Map(allLocations.map(l => [l.url, l])).values());
+    existing.source.locations = uniqueLocations;
+  };
 
   for (const { source, provider } of candidates) {
-    const doi = normalizeDoi(source.doi);
+    let matchIndex = -1;
 
-    if (doi) {
-      if (byDoi.has(doi)) {
-        const existing = byDoi.get(doi)!;
-        if (!existing.providers.includes(provider)) {
-          existing.providers.push(provider);
-        }
-        // Merge abstract if missing
-        if (!existing.source.abstract && source.abstract) {
-          existing.source = { ...existing.source, abstract: source.abstract };
-        }
-        // Merge metadata
-        existing.source = {
-          ...existing.source,
-          metadata: { ...source.metadata, ...existing.source.metadata },
-        };
-      } else {
-        byDoi.set(doi, { source: { ...source }, providers: [provider] });
+    for (let i = 0; i < groups.length; i++) {
+      const repr = groups[i].source;
+
+      // 1. Exact DOI match
+      const sourceDoi = source.identifiers?.find(i => i.identifier_type === 'doi')?.normalized_value || normalizeDoi(source.doi);
+      const reprDoi = repr.identifiers?.find(i => i.identifier_type === 'doi')?.normalized_value || normalizeDoi(repr.doi);
+      if (sourceDoi && reprDoi && sourceDoi === reprDoi) {
+        matchIndex = i; break;
       }
-    } else {
-      // Title+year fallback
+
+      // 2. Exact Handle/PMID match
+      const sourcePmid = source.identifiers?.find(i => i.identifier_type === 'pmid')?.normalized_value;
+      const reprPmid = repr.identifiers?.find(i => i.identifier_type === 'pmid')?.normalized_value;
+      if (sourcePmid && reprPmid && sourcePmid === reprPmid) {
+        matchIndex = i; break;
+      }
+
+      // 3. Exact ISBN match + Title for chapters
+      const sourceIsbn = source.identifiers?.find(i => i.identifier_type === 'isbn')?.normalized_value;
+      const reprIsbn = repr.identifiers?.find(i => i.identifier_type === 'isbn')?.normalized_value;
+      if (sourceIsbn && reprIsbn && sourceIsbn === reprIsbn) {
+        if (source.source_type === 'book_chapter' || repr.source_type === 'book_chapter') {
+           const sameTitle = source.title.toLowerCase().trim() === repr.title.toLowerCase().trim();
+           if (sameTitle) { matchIndex = i; break; }
+        } else {
+           matchIndex = i; break;
+        }
+      }
+
+      // 4. Title+year fallback
       const titleLower = source.title.toLowerCase().trim().slice(0, 60);
-      const year = source.publication_year;
-      const found = byTitleYear.find(
-        s =>
-          s.source.title.toLowerCase().trim().slice(0, 60) === titleLower &&
-          s.source.publication_year === year
-      );
-      if (found) {
-        if (!found.providers.includes(provider)) found.providers.push(provider);
-        if (!found.source.abstract && source.abstract) {
-          found.source = { ...found.source, abstract: source.abstract };
-        }
-      } else {
-        byTitleYear.push({ source: { ...source }, providers: [provider] });
+      const reprTitleLower = repr.title.toLowerCase().trim().slice(0, 60);
+      if (titleLower === reprTitleLower && source.publication_year === repr.publication_year) {
+         matchIndex = i; break;
       }
+    }
+
+    if (matchIndex !== -1) {
+      mergeProvenance(groups[matchIndex], source, provider);
+    } else {
+      groups.push({ source: { ...source }, providers: [provider] });
     }
   }
 
-  return [...Array.from(byDoi.values()), ...byTitleYear];
+  return groups;
 }
 
 // ─── Candidate Scoring ────────────────────────────────────────────────────────

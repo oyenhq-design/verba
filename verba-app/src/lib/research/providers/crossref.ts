@@ -30,6 +30,45 @@ function parseCrossrefItem(item: any): NormalizedSource {
     }
   }
 
+  const identifiers: any[] = [];
+  const locations: any[] = [];
+
+  const normDoi = normalizeDoi(item.DOI);
+  if (normDoi) {
+    identifiers.push({
+      identifier_type: 'doi',
+      identifier_value: item.DOI,
+      normalized_value: normDoi,
+      is_primary: true
+    });
+  }
+
+  if (item.ISBN && Array.isArray(item.ISBN)) {
+    for (const isbn of item.ISBN) {
+      // Very basic normalization for ISBN (strip dashes and spaces)
+      const normIsbn = isbn.replace(/[-\s]/g, '');
+      if (normIsbn) {
+        identifiers.push({
+          identifier_type: 'isbn',
+          identifier_value: isbn,
+          normalized_value: normIsbn,
+          is_primary: !normDoi && identifiers.length === 0
+        });
+      }
+    }
+  }
+
+  if (item.URL) {
+    locations.push({
+      location_type: normDoi ? 'doi_landing_page' : 'publisher',
+      url: item.URL,
+      access_status: 'unknown',
+      content_type: 'landing_page',
+      provider: item.publisher || 'crossref',
+      is_primary: true
+    });
+  }
+
   let year: number | null = null;
   if (item.published && item.published['date-parts'] && item.published['date-parts'][0]) {
     year = item.published['date-parts'][0][0];
@@ -57,13 +96,15 @@ function parseCrossrefItem(item: any): NormalizedSource {
     volume: item.volume || null,
     issue: item.issue || null,
     pages: item.page || null,
-    doi: normalizeDoi(item.DOI) || null,
+    doi: normDoi || null,
     url: item.URL || null,
     abstract,
     source_provider: 'crossref',
     metadata: {
       is_referenced_by_count: item['is-referenced-by-count']
-    }
+    },
+    identifiers,
+    locations
   };
 }
 

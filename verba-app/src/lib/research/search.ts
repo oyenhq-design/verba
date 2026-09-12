@@ -39,6 +39,15 @@ function mergeSources(sources: NormalizedSource[]): { source: NormalizedSource, 
     
     // Merge metadata
     merged.metadata = { ...other.metadata, ...merged.metadata };
+    
+    // Combine arrays
+    const allIdentifiers = [...(merged.identifiers || []), ...(other.identifiers || [])];
+    const uniqueIdentifiers = Array.from(new Map(allIdentifiers.map(i => [`${i.identifier_type}:${i.normalized_value}`, i])).values());
+    merged.identifiers = uniqueIdentifiers;
+
+    const allLocations = [...(merged.locations || []), ...(other.locations || [])];
+    const uniqueLocations = Array.from(new Map(allLocations.map(l => [l.url, l])).values());
+    merged.locations = uniqueLocations;
   }
 
   return { source: merged, provenance };
@@ -63,28 +72,53 @@ export async function performResearchSearch(query: string): Promise<{ results: R
     providerStatus.openalex = e.message || 'error';
   }
 
-  const mergedMap = new Map<string, NormalizedSource[]>();
-  const resultsWithoutDoi: NormalizedSource[][] = [];
+  const groups: NormalizedSource[][] = [];
 
   const addResult = (source: NormalizedSource) => {
-    const doi = normalizeDoi(source.doi);
-    if (doi) {
-      if (!mergedMap.has(doi)) mergedMap.set(doi, []);
-      mergedMap.get(doi)!.push(source);
-    } else {
-      // Fallback matching for non-DOI sources
-      let foundMatch = false;
-      for (const group of resultsWithoutDoi) {
-        const repr = group[0];
-        const sameTitle = normalizeTitle(repr.title).toLowerCase() === normalizeTitle(source.title).toLowerCase();
-        const sameYear = repr.publication_year === source.publication_year;
-        if (sameTitle && sameYear) {
-          group.push(source);
-          foundMatch = true;
-          break;
+    let matchIndex = -1;
+
+    for (let i = 0; i < groups.length; i++) {
+      const group = groups[i];
+      const repr = group[0];
+
+      // 1. Exact DOI match
+      const sourceDoi = source.identifiers?.find(i => i.identifier_type === 'doi')?.normalized_value;
+      const reprDoi = repr.identifiers?.find(i => i.identifier_type === 'doi')?.normalized_value;
+      if (sourceDoi && reprDoi && sourceDoi === reprDoi) {
+        matchIndex = i; break;
+      }
+
+      // 2. Exact Handle/PMID match
+      const sourcePmid = source.identifiers?.find(i => i.identifier_type === 'pmid')?.normalized_value;
+      const reprPmid = repr.identifiers?.find(i => i.identifier_type === 'pmid')?.normalized_value;
+      if (sourcePmid && reprPmid && sourcePmid === reprPmid) {
+        matchIndex = i; break;
+      }
+
+      // 3. Exact ISBN match (but require title match for chapters to prevent false merges)
+      const sourceIsbn = source.identifiers?.find(i => i.identifier_type === 'isbn')?.normalized_value;
+      const reprIsbn = repr.identifiers?.find(i => i.identifier_type === 'isbn')?.normalized_value;
+      if (sourceIsbn && reprIsbn && sourceIsbn === reprIsbn) {
+        if (source.source_type === 'book_chapter' || repr.source_type === 'book_chapter') {
+           const sameTitle = normalizeTitle(repr.title).toLowerCase() === normalizeTitle(source.title).toLowerCase();
+           if (sameTitle) { matchIndex = i; break; }
+        } else {
+           matchIndex = i; break;
         }
       }
-      if (!foundMatch) resultsWithoutDoi.push([source]);
+
+      // 4. Fallback matching (title + year + author)
+      const sameTitle = normalizeTitle(repr.title).toLowerCase() === normalizeTitle(source.title).toLowerCase();
+      const sameYear = repr.publication_year === source.publication_year;
+      if (sameTitle && sameYear) {
+         matchIndex = i; break;
+      }
+    }
+
+    if (matchIndex !== -1) {
+      groups[matchIndex].push(source);
+    } else {
+      groups.push([source]);
     }
   };
 
@@ -93,15 +127,7 @@ export async function performResearchSearch(query: string): Promise<{ results: R
 
   const finalResults: ResearchResult[] = [];
 
-  // Process DOI matched groups
-  for (const group of Array.from(mergedMap.values())) {
-    const { source, provenance } = mergeSources(group);
-    const integrity = buildIntegrity(source, provenance.providers, query);
-    finalResults.push({ source, provenance, integrity });
-  }
-
-  // Process non-DOI groups
-  for (const group of resultsWithoutDoi) {
+  for (const group of groups) {
     const { source, provenance } = mergeSources(group);
     const integrity = buildIntegrity(source, provenance.providers, query);
     finalResults.push({ source, provenance, integrity });

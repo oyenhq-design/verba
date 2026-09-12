@@ -30,10 +30,12 @@ export async function PATCH(
     delete (updateData as any).id;
     delete (updateData as any).created_at;
 
+    const { identifiers, locations, ...baseUpdateData } = updateData as any;
+
     const { data: updated, error } = await supabase
       .from('work_sources')
       .update({
-        ...updateData,
+        ...baseUpdateData,
         updated_at: new Date().toISOString()
       })
       .eq('id', params.sourceId)
@@ -45,7 +47,27 @@ export async function PATCH(
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json(updated);
+    if (identifiers) {
+      await supabase.from('source_identifiers').delete().eq('source_id', params.sourceId);
+      if (identifiers.length > 0) {
+        await supabase.from('source_identifiers').insert(identifiers.map((i: any) => ({ ...i, source_id: params.sourceId })));
+      }
+    }
+
+    if (locations) {
+      await supabase.from('source_locations').delete().eq('source_id', params.sourceId);
+      if (locations.length > 0) {
+        await supabase.from('source_locations').insert(locations.map((l: any) => ({ ...l, source_id: params.sourceId })));
+      }
+    }
+
+    const { data: finalUpdated } = await supabase
+      .from('work_sources')
+      .select('*, identifiers:source_identifiers(*), locations:source_locations(*)')
+      .eq('id', params.sourceId)
+      .single();
+
+    return NextResponse.json(finalUpdated || updated);
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }

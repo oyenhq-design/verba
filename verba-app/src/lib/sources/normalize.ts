@@ -55,5 +55,19 @@ export const SourceSchema = z.object({
     'semantic_scholar',
     'imported'
   ]).default('manual'),
-  metadata: z.record(z.string(), z.unknown()).default({})
+  metadata: z.record(z.string(), z.unknown()).default({}),
+  identifiers: z.array(z.object({
+    identifier_type: z.string(),
+    identifier_value: z.string(),
+    normalized_value: z.string(),
+    is_primary: z.boolean()
+  })).optional(),
+  locations: z.array(z.object({
+    location_type: z.string(),
+    url: z.string(),
+    access_status: z.string(),
+    content_type: z.string(),
+    provider: z.string().optional(),
+    is_primary: z.boolean()
+  })).optional()
 });

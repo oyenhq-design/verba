@@ -22,6 +22,34 @@ export type SourceAuthor = {
   family: string;
 };
 
+export type IdentifierType = 'doi' | 'isbn' | 'handle' | 'arxiv' | 'pmid' | 'url' | 'other';
+
+export type SourceIdentifier = {
+  id?: string;
+  source_id?: string;
+  identifier_type: IdentifierType;
+  identifier_value: string;
+  normalized_value: string;
+  is_primary: boolean;
+  created_at?: string;
+};
+
+export type AccessStatus = 'open' | 'closed' | 'unknown';
+export type LocationType = 'publisher' | 'repository' | 'doi_landing_page' | 'source_page';
+export type ContentType = 'pdf' | 'html_full_text' | 'landing_page' | 'metadata';
+
+export type SourceLocation = {
+  id?: string;
+  source_id?: string;
+  location_type: LocationType;
+  url: string;
+  access_status: AccessStatus;
+  content_type: ContentType;
+  provider?: string;
+  is_primary: boolean;
+  created_at?: string;
+};
+
 export type NormalizedSource = {
   id?: string;
   source_type: SourceType;
@@ -38,6 +66,8 @@ export type NormalizedSource = {
   abstract: string | null;
   source_provider: SourceProvider;
   metadata: Record<string, unknown>;
+  identifiers?: SourceIdentifier[];
+  locations?: SourceLocation[];
   created_at?: string;
   updated_at?: string;
 };

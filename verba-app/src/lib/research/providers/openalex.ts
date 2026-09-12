@@ -62,6 +62,52 @@ function parseOpenAlexItem(item: any): NormalizedSource {
     }
   }
 
+  const identifiers: any[] = [];
+  const locations: any[] = [];
+
+  const normDoi = normalizeDoi(item.doi);
+  if (normDoi) {
+    identifiers.push({
+      identifier_type: 'doi',
+      identifier_value: item.doi,
+      normalized_value: normDoi,
+      is_primary: true
+    });
+  }
+
+  if (item.ids) {
+    if (item.ids.pmid) {
+      identifiers.push({
+        identifier_type: 'pmid',
+        identifier_value: item.ids.pmid.replace('https://pubmed.ncbi.nlm.nih.gov/', ''),
+        normalized_value: item.ids.pmid.replace('https://pubmed.ncbi.nlm.nih.gov/', ''),
+        is_primary: false
+      });
+    }
+  }
+
+  if (item.primary_location && item.primary_location.landing_page_url) {
+    const isOa = item.primary_location.is_oa === true;
+    locations.push({
+      location_type: normDoi ? 'doi_landing_page' : 'source_page',
+      url: item.primary_location.landing_page_url,
+      access_status: isOa ? 'open' : (item.primary_location.is_oa === false ? 'closed' : 'unknown'),
+      content_type: item.primary_location.pdf_url ? 'pdf' : 'landing_page',
+      provider: item.primary_location.source?.host_organization_name || 'openalex',
+      is_primary: true
+    });
+    if (item.primary_location.pdf_url) {
+       locations.push({
+         location_type: 'repository',
+         url: item.primary_location.pdf_url,
+         access_status: 'open',
+         content_type: 'pdf',
+         provider: item.primary_location.source?.host_organization_name || 'openalex',
+         is_primary: false
+       });
+    }
+  }
+
   const container_title = item.primary_location?.source?.display_name || null;
   const publisher = item.primary_location?.source?.host_organization_name || null;
 
@@ -90,7 +136,7 @@ function parseOpenAlexItem(item: any): NormalizedSource {
     volume: item.biblio?.volume || null,
     issue: item.biblio?.issue || null,
     pages: (item.biblio?.first_page && item.biblio?.last_page) ? `${item.biblio.first_page}-${item.biblio.last_page}` : item.biblio?.first_page || null,
-    doi: normalizeDoi(item.doi) || null,
+    doi: normDoi || null,
     url: item.primary_location?.landing_page_url || item.doi || null,
     abstract,
     source_provider: 'openalex',
@@ -100,7 +146,9 @@ function parseOpenAlexItem(item: any): NormalizedSource {
       is_retracted: item.is_retracted,
       topics: topics,
       openalex_id: item.id
-    }
+    },
+    identifiers,
+    locations
   };
 }
 
