@@ -33,8 +33,8 @@ export async function GET(
       return NextResponse.json({ error: 'Query too long' }, { status: 400 });
     }
 
-    const { results, providerStatus } = await performResearchSearch(q.trim());
-    return NextResponse.json({ results, providerStatus });
+    const { results, providerStatus, plan } = await performResearchSearch(q.trim());
+    return NextResponse.json({ results, providerStatus, plan });
   } catch (err: any) {
     console.error("Research search error:", err);
     return NextResponse.json({ error: err.message }, { status: 500 });

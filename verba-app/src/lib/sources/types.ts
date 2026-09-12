@@ -40,7 +40,7 @@ export type SourceIdentifier = {
 };
 
 export type AccessStatus = 'open' | 'closed' | 'unknown';
-export type LocationType = 'publisher' | 'repository' | 'doi_landing_page' | 'source_page';
+export type LocationType = 'publisher' | 'repository' | 'doi_landing_page' | 'source_page' | 'full_text';
 export type ContentType = 'pdf' | 'html_full_text' | 'landing_page' | 'metadata';
 
 export type SourceLocation = {

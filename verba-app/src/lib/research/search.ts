@@ -1,12 +1,13 @@
 import { NormalizedSource } from '../sources/types';
 import { normalizeDoi, normalizeTitle } from '../sources/normalize';
-import { searchCrossref, lookupCrossrefByDoi } from './providers/crossref';
-import { searchOpenAlex, lookupOpenAlexByDoi } from './providers/openalex';
-import { searchGoogleBooks } from './providers/googleBooks';
-import { searchOpenLibrary } from './providers/openLibrary';
-import { searchArxiv } from './providers/arxiv';
 import { ResearchResult, ProviderProvenance } from './types';
 import { buildIntegrity } from './integrity';
+import { planResearchQuery, ResearchPlan } from './planner';
+import { executeProviders, isUsableResearchResult, ProviderExecutionStatus } from './executor';
+
+// Kept purely for the lookup endpoint
+import { lookupCrossrefByDoi } from './providers/crossref';
+import { lookupOpenAlexByDoi } from './providers/openalex';
 
 function mergeSources(sources: NormalizedSource[]): { source: NormalizedSource, provenance: ProviderProvenance } {
   if (sources.length === 0) throw new Error("Cannot merge empty array");
@@ -36,6 +37,7 @@ function mergeSources(sources: NormalizedSource[]): { source: NormalizedSource, 
     if (s.source_provider === 'google_books' && s.metadata?.google_books_id) provenance.provider_ids['google_books'] = s.metadata.google_books_id as string;
     if (s.source_provider === 'open_library' && s.metadata?.open_library_key) provenance.provider_ids['open_library'] = s.metadata.open_library_key as string;
     if (s.source_provider === 'arxiv' && s.metadata?.arxiv_version_id) provenance.provider_ids['arxiv'] = s.metadata.arxiv_version_id as string;
+    if (s.source_provider === 'serper' && s.url) provenance.provider_ids['serper'] = s.url;
   });
 
   // Unique merge all sources into 'merged'
@@ -66,48 +68,20 @@ function mergeSources(sources: NormalizedSource[]): { source: NormalizedSource, 
     merged.locations = uniqueLocations;
   }
 
+  // Ensure abstract isn't populated from a serper snippet if one got accidentally passed
+  if (merged.source_provider === 'serper' && merged.abstract === merged.metadata?.snippet) {
+     merged.abstract = null;
+  }
+
   return { source: merged, provenance };
 }
 
-export async function performResearchSearch(query: string): Promise<{ results: ResearchResult[], providerStatus: Record<string, string> }> {
-  const providerStatus: Record<string, string> = { crossref: 'ok', openalex: 'ok', google_books: 'ok', open_library: 'ok', arxiv: 'ok' };
+export async function performResearchSearch(query: string): Promise<{ results: ResearchResult[], providerStatus: Record<string, any>, plan: ResearchPlan }> {
+  // 1. Plan Research Intent
+  const plan = planResearchQuery(query, 'ordinary_research');
   
-  let crossrefResults: NormalizedSource[] = [];
-  let openalexResults: NormalizedSource[] = [];
-  let googleBooksResults: NormalizedSource[] = [];
-  let openLibraryResults: NormalizedSource[] = [];
-  let arxivResults: NormalizedSource[] = [];
-
-  // Parallel provider calls
-  try {
-    crossrefResults = await searchCrossref(query);
-  } catch (e: any) {
-    providerStatus.crossref = e.message || 'error';
-  }
-
-  try {
-    openalexResults = await searchOpenAlex(query);
-  } catch (e: any) {
-    providerStatus.openalex = e.message || 'error';
-  }
-
-  try {
-    googleBooksResults = await searchGoogleBooks(query);
-  } catch (e: any) {
-    providerStatus.google_books = e.message || 'error';
-  }
-
-  try {
-    openLibraryResults = await searchOpenLibrary(query);
-  } catch (e: any) {
-    providerStatus.open_library = e.message || 'error';
-  }
-
-  try {
-    arxivResults = await searchArxiv(query);
-  } catch (e: any) {
-    providerStatus.arxiv = e.message || 'error';
-  }
+  // 2. Execute Primary Providers
+  const { rawCandidates, providerStatus } = await executeProviders(plan.primaryProviders, plan.originalQuery);
 
   const groups: NormalizedSource[][] = [];
 
@@ -118,14 +92,11 @@ export async function performResearchSearch(query: string): Promise<{ results: R
       const group = groups[i];
       const repr = group[0];
 
-      // 4. Exact DOI match
+      // Exact DOI match
       const sourceDoi = source.identifiers?.find(i => i.identifier_type === 'doi')?.normalized_value || source.doi;
       const reprDoi = repr.identifiers?.find(i => i.identifier_type === 'doi')?.normalized_value || repr.doi;
-      
       const sameDoi = sourceDoi && reprDoi && sourceDoi === reprDoi;
       
-      // PREPRINT VS JOURNAL SAFETY
-      // Do not merge preprints into journal articles even if they share a DOI (e.g. published version DOI in arXiv metadata).
       const isCrossTypeMatch = (source.source_type === 'preprint' && repr.source_type === 'journal_article') ||
                                (source.source_type === 'journal_article' && repr.source_type === 'preprint');
                                
@@ -134,28 +105,16 @@ export async function performResearchSearch(query: string): Promise<{ results: R
         break;
       }
 
-      // 2. Exact PMID match
-      const sourcePmid = source.identifiers?.find(i => i.identifier_type === 'pmid')?.normalized_value;
-      const reprPmid = repr.identifiers?.find(i => i.identifier_type === 'pmid')?.normalized_value;
-      if (sourcePmid && reprPmid && sourcePmid === reprPmid) {
-        matchIndex = i; break;
+      // PMCID/PMID/Handle exact matches ...
+      const exactMatchTypes = ['pmid', 'pmcid', 'handle'];
+      for (const t of exactMatchTypes) {
+         const sid = source.identifiers?.find(i => i.identifier_type === t)?.normalized_value;
+         const rid = repr.identifiers?.find(i => i.identifier_type === t)?.normalized_value;
+         if (sid && rid && sid === rid) { matchIndex = i; break; }
       }
+      if (matchIndex !== -1) break;
 
-      // 3. Exact PMCID match
-      const sourcePmcid = source.identifiers?.find(i => i.identifier_type === 'pmcid')?.normalized_value;
-      const reprPmcid = repr.identifiers?.find(i => i.identifier_type === 'pmcid')?.normalized_value;
-      if (sourcePmcid && reprPmcid && sourcePmcid === reprPmcid) {
-        matchIndex = i; break;
-      }
-
-      // 4. Exact Handle match
-      const sourceHandle = source.identifiers?.find(i => i.identifier_type === 'handle')?.normalized_value;
-      const reprHandle = repr.identifiers?.find(i => i.identifier_type === 'handle')?.normalized_value;
-      if (sourceHandle && reprHandle && sourceHandle === reprHandle) {
-        matchIndex = i; break;
-      }
-
-      // 5. Exact ISBN match (but require title match for chapters to prevent false merges)
+      // Exact ISBN match
       const sourceIsbns = source.identifiers?.filter(i => i.identifier_type === 'isbn').map(i => i.normalized_value) || [];
       const reprIsbns = repr.identifiers?.filter(i => i.identifier_type === 'isbn').map(i => i.normalized_value) || [];
       const hasOverlappingIsbn = sourceIsbns.some(isbn => reprIsbns.includes(isbn));
@@ -165,14 +124,11 @@ export async function performResearchSearch(query: string): Promise<{ results: R
            const sameTitle = normalizeTitle(repr.title).toLowerCase() === normalizeTitle(source.title).toLowerCase();
            if (sameTitle) { matchIndex = i; break; }
         } else {
-           // Basic title check to avoid merging different editions if titles are wildly different?
-           // Actually user says: "Exact ISBN + compatible title + compatible authors -> strong merge candidate"
-           // For now, overlapping ISBN for books is usually sufficient, but we can do a loose title check if desired.
            matchIndex = i; break;
         }
       }
 
-      // 6. Fallback matching (title + year + author)
+      // Fallback matching
       const sameTitle = normalizeTitle(repr.title).toLowerCase() === normalizeTitle(source.title).toLowerCase();
       const sameYear = repr.publication_year === source.publication_year;
       if (sameTitle && sameYear) {
@@ -180,32 +136,47 @@ export async function performResearchSearch(query: string): Promise<{ results: R
       }
     }
 
-    if (matchIndex !== -1) {
-      groups[matchIndex].push(source);
-    } else {
-      groups.push([source]);
-    }
+    if (matchIndex !== -1) groups[matchIndex].push(source);
+    else groups.push([source]);
   };
 
-  crossrefResults.forEach(addResult);
-  openalexResults.forEach(addResult);
-  arxivResults.forEach(addResult); // Add arXiv alongside scholarly sources
-  googleBooksResults.forEach(addResult);
-  openLibraryResults.forEach(addResult);
+  // 3. Process Primary Candidates
+  rawCandidates.forEach(c => addResult(c.source));
 
+  // 4. Evaluate Usable Coverage
+  const usableCount = groups.filter(g => g.some(s => isUsableResearchResult(s))).length;
+
+  // 5. Execute Fallbacks if Needed
+  if (usableCount < 3 && plan.fallbackProviders.length > 0) {
+    const fallbackExec = await executeProviders(plan.fallbackProviders, plan.originalQuery);
+    fallbackExec.rawCandidates.forEach(c => addResult(c.source));
+    // Merge status
+    Object.assign(providerStatus, fallbackExec.providerStatus);
+  } else {
+    for (const fb of plan.fallbackProviders) {
+       providerStatus[fb] = { status: 'fallback_not_needed' };
+    }
+  }
+
+  // 6. Finalize Canonical Sources
   const finalResults: ResearchResult[] = [];
-
   for (const group of groups) {
     const { source, provenance } = mergeSources(group);
     const integrity = buildIntegrity(source, provenance.providers, query);
     finalResults.push({ source, provenance, integrity });
   }
 
-  // Sort by relevance score (high -> low) roughly
+  // Rank / Sort (roughly by relevance and family appropriateness if desired)
   const scoreMap: Record<string, number> = { 'high': 3, 'medium': 2, 'low': 1, 'unknown': 0 };
   finalResults.sort((a, b) => scoreMap[b.integrity.relevance.status] - scoreMap[a.integrity.relevance.status]);
 
-  return { results: finalResults, providerStatus };
+  // Backward compatibility format for providerStatus strings
+  const formattedStatus: Record<string, string> = {};
+  for (const [k, v] of Object.entries(providerStatus)) {
+    formattedStatus[k] = v.error ? v.error : v.status;
+  }
+
+  return { results: finalResults, providerStatus: formattedStatus, plan };
 }
 
 export async function performDoiLookup(doi: string, expectedTitle?: string): Promise<{ result: ResearchResult | null, providerStatus: Record<string, string> }> {
@@ -220,20 +191,23 @@ export async function performDoiLookup(doi: string, expectedTitle?: string): Pro
     providerStatus.crossref = e.message || 'error';
   }
 
-  try {
-    openalexResult = await lookupOpenAlexByDoi(doi);
-  } catch (e: any) {
-    providerStatus.openalex = e.message || 'error';
+  if (!crossrefResult) {
+    try {
+      openalexResult = await lookupOpenAlexByDoi(doi);
+    } catch (e: any) {
+      providerStatus.openalex = e.message || 'error';
+    }
   }
 
-  const group: NormalizedSource[] = [];
-  if (crossrefResult) group.push(crossrefResult);
-  if (openalexResult) group.push(openalexResult);
+  if (!crossrefResult && !openalexResult) {
+    return { result: null, providerStatus };
+  }
 
-  if (group.length === 0) return { result: null, providerStatus };
+  const sourcesToMerge = [];
+  if (crossrefResult) sourcesToMerge.push(crossrefResult);
+  if (openalexResult) sourcesToMerge.push(openalexResult);
 
-  const { source, provenance } = mergeSources(group);
-  const integrity = buildIntegrity(source, provenance.providers, '', doi, expectedTitle);
-  
+  const { source, provenance } = mergeSources(sourcesToMerge);
+  const integrity = buildIntegrity(source, provenance.providers, expectedTitle || '');
   return { result: { source, provenance, integrity }, providerStatus };
 }

@@ -14,9 +14,9 @@
 
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { searchCrossref } from '@/lib/research/providers/crossref';
-import { searchOpenAlex } from '@/lib/research/providers/openalex';
-import { NormalizedSource } from '@/lib/sources/types';
+import { planResearchQuery } from '@/lib/research/planner';
+import { executeProviders, ProviderExecutionStatus } from '@/lib/research/executor';
+import { NormalizedSource, SourceProvider } from '@/lib/sources/types';
 import {
   classifyRecoveryMode,
   extractStudyFingerprint,
@@ -27,6 +27,7 @@ import {
 import { analyzeCandidate, rankCandidates, CandidateAnalysis } from '@/lib/citations/candidateMatch';
 import { extractClaimScope } from '@/lib/citations/scope';
 import { calculateRelevance, extractAccess } from '@/lib/research/integrity';
+import { upsertClaim } from '@/lib/evidence/claims';
 
 const MAX_RESULTS_PER_QUERY = 10;
 const MAX_CANDIDATES_TO_ANALYZE = 8;
@@ -58,10 +59,12 @@ export async function POST(
 
     // 3. Parse body
     const body = await request.json();
-    const { selected_claim, paragraph_context, is_passage_search } = body as {
+    const { selected_claim, paragraph_context, is_passage_search, document_id, block_id } = body as {
       selected_claim?: string;
       paragraph_context?: string;
       is_passage_search?: boolean;
+      document_id?: string;
+      block_id?: string;
     };
 
     if (!selected_claim || selected_claim.trim().length < 5) {
@@ -80,6 +83,23 @@ export async function POST(
     // 5. Classify mode (for evidence finding, usually 'supporting_research')
     const mode = classifyRecoveryMode(scope);
 
+    // 5b. Upsert Claim if persistent identity exists
+    let persistedClaimId = null;
+    if (document_id && block_id) {
+      try {
+        persistedClaimId = await upsertClaim(supabase, {
+          workId: params.workId,
+          documentId: document_id,
+          userId: user.id,
+          blockId: block_id,
+          claimText: selected_claim,
+          // Extract offsets if we start tracking them in the payload
+        });
+      } catch (e) {
+        console.error('[evidence search] Failed to upsert claim:', e);
+      }
+    }
+
     // 6. Extract study fingerprint, injecting project context
     const fingerprint = extractStudyFingerprint(scope, work.context || {});
 
@@ -96,9 +116,12 @@ export async function POST(
       });
     }
 
-    // 8. Search providers (progressive relaxation)
+    // 8. Plan Research
+    const plan = planResearchQuery(selected_claim, 'find_evidence');
+
+    // 9. Search providers (progressive relaxation)
     const providerStatus: Record<string, string> = {};
-    const rawCandidates: { source: NormalizedSource; provider: string }[] = [];
+    const rawCandidates: { source: NormalizedSource; provider: SourceProvider }[] = [];
     let finalRanked: CandidateAnalysis[] = [];
     let finalDeduplicatedCount = 0;
 
@@ -113,25 +136,16 @@ export async function POST(
 
       await Promise.all(
         stageQueries.map(async (q) => {
-          let crossrefResults: NormalizedSource[] = [];
-          let openalexResults: NormalizedSource[] = [];
-
-          try {
-            crossrefResults = await searchCrossref(q.query, MAX_RESULTS_PER_QUERY);
-            providerStatus.crossref = 'ok';
-          } catch (e: any) {
-            providerStatus.crossref = e.message || 'error';
+          const { rawCandidates: batchCandidates, providerStatus: batchStatus } = await executeProviders(plan.primaryProviders, q.query);
+          
+          for (const c of batchCandidates) {
+             rawCandidates.push(c);
           }
-
-          try {
-            openalexResults = await searchOpenAlex(q.query, MAX_RESULTS_PER_QUERY);
-            providerStatus.openalex = 'ok';
-          } catch (e: any) {
-            providerStatus.openalex = e.message || 'error';
+          
+          // Merge provider status safely
+          for (const [p, s] of Object.entries(batchStatus)) {
+             providerStatus[p] = s.error ? s.error : s.status;
           }
-
-          for (const s of crossrefResults) rawCandidates.push({ source: s, provider: 'crossref' });
-          for (const s of openalexResults) rawCandidates.push({ source: s, provider: 'openalex' });
         })
       );
 
@@ -253,6 +267,7 @@ export async function POST(
       providerStatus,
       totalRaw: rawCandidates.length,
       totalDeduped: finalDeduplicatedCount,
+      claimId: persistedClaimId
     });
   } catch (err: any) {
     console.error('[evidence search] Unexpected error:', err);

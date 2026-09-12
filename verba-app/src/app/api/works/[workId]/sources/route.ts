@@ -63,8 +63,9 @@ export async function POST(
     }
 
     const body = await request.json();
+    const { claimId, evidenceText, evidenceLevel, evidenceLocation, ...sourceBody } = body;
     
-    const parseResult = SourceSchema.safeParse(body);
+    const parseResult = SourceSchema.safeParse(sourceBody);
     if (!parseResult.success) {
       return NextResponse.json({ error: 'Invalid source data', details: parseResult.error.format() }, { status: 400 });
     }
@@ -117,6 +118,27 @@ export async function POST(
     }
 
     if (existingId) {
+      if (claimId) {
+        // Source exists, just link it to the claim
+        await supabase.from('claim_source_evidence').upsert({
+          claim_id: claimId,
+          source_id: existingId,
+          user_id: user.id,
+          relationship: 'not_checked',
+          evidence_level: evidenceLevel || 'metadata_only',
+          evidence_text: evidenceText ? evidenceText.substring(0, 1000) : null,
+          evidence_location: evidenceLocation || null,
+          verification_method: 'not_checked',
+        }, { onConflict: 'claim_id,source_id' });
+        
+        // Return existing source so frontend knows it succeeded
+        const { data: existingSrc } = await supabase
+          .from('work_sources')
+          .select('*, identifiers:source_identifiers(*), locations:source_locations(*)')
+          .eq('id', existingId)
+          .single();
+        return NextResponse.json(existingSrc);
+      }
       return NextResponse.json({ error: 'SOURCE_ALREADY_EXISTS', sourceId: existingId }, { status: 409 });
     }
 
@@ -146,6 +168,20 @@ export async function POST(
     if (locations && locations.length > 0) {
       const locRows = locations.map((l: any) => ({ ...l, source_id: inserted.id }));
       await supabase.from('source_locations').insert(locRows);
+    }
+
+    // Insert claim evidence mapping if provided
+    if (claimId) {
+      await supabase.from('claim_source_evidence').insert({
+        claim_id: claimId,
+        source_id: inserted.id,
+        user_id: user.id,
+        relationship: 'not_checked',
+        evidence_level: evidenceLevel || 'metadata_only',
+        evidence_text: evidenceText ? evidenceText.substring(0, 1000) : null,
+        evidence_location: evidenceLocation || null,
+        verification_method: 'not_checked',
+      });
     }
 
     // Return with fetched arrays
