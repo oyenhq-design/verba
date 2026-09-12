@@ -4,6 +4,7 @@ import { searchCrossref, lookupCrossrefByDoi } from './providers/crossref';
 import { searchOpenAlex, lookupOpenAlexByDoi } from './providers/openalex';
 import { searchGoogleBooks } from './providers/googleBooks';
 import { searchOpenLibrary } from './providers/openLibrary';
+import { searchArxiv } from './providers/arxiv';
 import { ResearchResult, ProviderProvenance } from './types';
 import { buildIntegrity } from './integrity';
 
@@ -34,6 +35,7 @@ function mergeSources(sources: NormalizedSource[]): { source: NormalizedSource, 
     if (s.source_provider === 'crossref' && s.doi) provenance.provider_ids['crossref'] = s.doi;
     if (s.source_provider === 'google_books' && s.metadata?.google_books_id) provenance.provider_ids['google_books'] = s.metadata.google_books_id as string;
     if (s.source_provider === 'open_library' && s.metadata?.open_library_key) provenance.provider_ids['open_library'] = s.metadata.open_library_key as string;
+    if (s.source_provider === 'arxiv' && s.metadata?.arxiv_version_id) provenance.provider_ids['arxiv'] = s.metadata.arxiv_version_id as string;
   });
 
   // Unique merge all sources into 'merged'
@@ -68,12 +70,13 @@ function mergeSources(sources: NormalizedSource[]): { source: NormalizedSource, 
 }
 
 export async function performResearchSearch(query: string): Promise<{ results: ResearchResult[], providerStatus: Record<string, string> }> {
-  const providerStatus: Record<string, string> = { crossref: 'ok', openalex: 'ok', google_books: 'ok', open_library: 'ok' };
+  const providerStatus: Record<string, string> = { crossref: 'ok', openalex: 'ok', google_books: 'ok', open_library: 'ok', arxiv: 'ok' };
   
   let crossrefResults: NormalizedSource[] = [];
   let openalexResults: NormalizedSource[] = [];
   let googleBooksResults: NormalizedSource[] = [];
   let openLibraryResults: NormalizedSource[] = [];
+  let arxivResults: NormalizedSource[] = [];
 
   // Parallel provider calls
   try {
@@ -100,6 +103,12 @@ export async function performResearchSearch(query: string): Promise<{ results: R
     providerStatus.open_library = e.message || 'error';
   }
 
+  try {
+    arxivResults = await searchArxiv(query);
+  } catch (e: any) {
+    providerStatus.arxiv = e.message || 'error';
+  }
+
   const groups: NormalizedSource[][] = [];
 
   const addResult = (source: NormalizedSource) => {
@@ -109,11 +118,20 @@ export async function performResearchSearch(query: string): Promise<{ results: R
       const group = groups[i];
       const repr = group[0];
 
-      // 1. Exact DOI match
-      const sourceDoi = source.identifiers?.find(i => i.identifier_type === 'doi')?.normalized_value;
-      const reprDoi = repr.identifiers?.find(i => i.identifier_type === 'doi')?.normalized_value;
-      if (sourceDoi && reprDoi && sourceDoi === reprDoi) {
-        matchIndex = i; break;
+      // 4. Exact DOI match
+      const sourceDoi = source.identifiers?.find(i => i.identifier_type === 'doi')?.normalized_value || source.doi;
+      const reprDoi = repr.identifiers?.find(i => i.identifier_type === 'doi')?.normalized_value || repr.doi;
+      
+      const sameDoi = sourceDoi && reprDoi && sourceDoi === reprDoi;
+      
+      // PREPRINT VS JOURNAL SAFETY
+      // Do not merge preprints into journal articles even if they share a DOI (e.g. published version DOI in arXiv metadata).
+      const isCrossTypeMatch = (source.source_type === 'preprint' && repr.source_type === 'journal_article') ||
+                               (source.source_type === 'journal_article' && repr.source_type === 'preprint');
+                               
+      if (sameDoi && !isCrossTypeMatch) {
+        matchIndex = i;
+        break;
       }
 
       // 2. Exact PMID match
@@ -171,6 +189,7 @@ export async function performResearchSearch(query: string): Promise<{ results: R
 
   crossrefResults.forEach(addResult);
   openalexResults.forEach(addResult);
+  arxivResults.forEach(addResult); // Add arXiv alongside scholarly sources
   googleBooksResults.forEach(addResult);
   openLibraryResults.forEach(addResult);
 
