@@ -67,17 +67,26 @@ export function classifyEvidenceAvailability(
   }
 
   // Level 2: Lawful OA full text URL available
-  const oa = source.metadata?.open_access as any;
   let oaUrl: string | null = null;
+  
+  if (source.locations && source.locations.length > 0) {
+    const pdfLoc = source.locations.find(l => l.content_type === 'pdf');
+    const htmlLoc = source.locations.find(l => l.content_type === 'html_full_text');
+    if (pdfLoc) oaUrl = pdfLoc.url;
+    else if (htmlLoc) oaUrl = htmlLoc.url;
+  }
 
-  if (oa?.is_oa && oa?.oa_url) {
-    try {
-      const u = new URL(oa.oa_url);
-      if (u.protocol === 'http:' || u.protocol === 'https:') {
-        oaUrl = oa.oa_url;
+  if (!oaUrl) {
+    const oa = source.metadata?.open_access as any;
+    if (oa?.is_oa && oa?.oa_url) {
+      try {
+        const u = new URL(oa.oa_url);
+        if (u.protocol === 'http:' || u.protocol === 'https:') {
+          oaUrl = oa.oa_url;
+        }
+      } catch (_) {
+        // invalid URL — ignore
       }
-    } catch (_) {
-      // invalid URL — ignore
     }
   }
 

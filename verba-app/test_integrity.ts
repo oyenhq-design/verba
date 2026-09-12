@@ -75,7 +75,7 @@ const bibWarningSource: NormalizedSource = {
   metadata: {
     integrity: {
       identity: { status: "confirmed", agreement: ["crossref", "openalex"], reasons: [] },
-      evidence_availability: "full_text_available",
+      evidence_availability: "full_text_location_available",
       retraction: "none_known",
     }
   }

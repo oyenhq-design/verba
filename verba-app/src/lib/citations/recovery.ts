@@ -448,14 +448,28 @@ export function deduplicateCandidates(
         matchIndex = i; break;
       }
 
-      // 2. Exact Handle/PMID match
+      // 2. Exact PMID match
       const sourcePmid = source.identifiers?.find(i => i.identifier_type === 'pmid')?.normalized_value;
       const reprPmid = repr.identifiers?.find(i => i.identifier_type === 'pmid')?.normalized_value;
       if (sourcePmid && reprPmid && sourcePmid === reprPmid) {
         matchIndex = i; break;
       }
 
-      // 3. Exact ISBN match + Title for chapters
+      // 3. Exact PMCID match
+      const sourcePmcid = source.identifiers?.find(i => i.identifier_type === 'pmcid')?.normalized_value;
+      const reprPmcid = repr.identifiers?.find(i => i.identifier_type === 'pmcid')?.normalized_value;
+      if (sourcePmcid && reprPmcid && sourcePmcid === reprPmcid) {
+        matchIndex = i; break;
+      }
+
+      // 4. Exact Handle match
+      const sourceHandle = source.identifiers?.find(i => i.identifier_type === 'handle')?.normalized_value;
+      const reprHandle = repr.identifiers?.find(i => i.identifier_type === 'handle')?.normalized_value;
+      if (sourceHandle && reprHandle && sourceHandle === reprHandle) {
+        matchIndex = i; break;
+      }
+
+      // 5. Exact ISBN match + Title for chapters
       const sourceIsbn = source.identifiers?.find(i => i.identifier_type === 'isbn')?.normalized_value;
       const reprIsbn = repr.identifiers?.find(i => i.identifier_type === 'isbn')?.normalized_value;
       if (sourceIsbn && reprIsbn && sourceIsbn === reprIsbn) {
@@ -467,7 +481,7 @@ export function deduplicateCandidates(
         }
       }
 
-      // 4. Title+year fallback
+      // 6. Title+year fallback
       const titleLower = source.title.toLowerCase().trim().slice(0, 60);
       const reprTitleLower = repr.title.toLowerCase().trim().slice(0, 60);
       if (titleLower === reprTitleLower && source.publication_year === repr.publication_year) {

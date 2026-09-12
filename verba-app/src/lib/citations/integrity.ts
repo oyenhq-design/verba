@@ -132,7 +132,7 @@ export type CitationIntegrityResult = {
       | 'not_checked'
       | 'metadata_only'
       | 'abstract_available'
-      | 'full_text_available';
+      | 'full_text_location_available';
   };
 
   claimSupport: {
@@ -277,7 +277,7 @@ export function evaluateCitationIntegrity(
       // Deterministically infer from source metadata when no H1 record
       const oa = source.metadata?.open_access as any;
       if (oa?.is_oa && oa?.oa_url) {
-        result.evidenceAvailability.status = 'full_text_available';
+        result.evidenceAvailability.status = 'full_text_location_available';
       } else if (source.abstract) {
         result.evidenceAvailability.status = 'abstract_available';
       } else {
@@ -336,7 +336,7 @@ export function evaluateCitationIntegrity(
         ? 'metadata_only'
         : evidenceDetail.level === 1
         ? 'abstract_available'
-        : 'full_text_available';
+        : 'full_text_location_available';
 
     // H2A: Topic Relevance (separate from H1 search relevance)
     const relevance = evaluateTopicRelevance(source, scope, projectContext);
@@ -375,7 +375,7 @@ export function evaluateCitationIntegrity(
         ? 'metadata_only'
         : evidenceDetail.level === 1
         ? 'abstract_available'
-        : 'full_text_available';
+        : 'full_text_location_available';
   }
 
   // Source exists but bibliography status is still 'missing' (initial default)

@@ -2,7 +2,7 @@ import { NormalizedSource, SourceProvider } from '../sources/types';
 
 export type IdentityStatus = 'confirmed' | 'partial' | 'conflict' | 'not_found' | 'unverified';
 export type RelevanceStatus = 'high' | 'medium' | 'low' | 'unknown';
-export type EvidenceStatus = 'not_checked' | 'metadata_only' | 'abstract_available' | 'full_text_available';
+export type EvidenceStatus = 'not_checked' | 'metadata_only' | 'abstract_available' | 'full_text_location_available';
 export type AccessStatus = 'open' | 'closed' | 'unknown';
 export type RetractionStatus = 'none_known' | 'retracted' | 'corrected' | 'expression_of_concern' | 'unknown';
 

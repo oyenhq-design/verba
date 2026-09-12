@@ -22,7 +22,7 @@ export type SourceAuthor = {
   family: string;
 };
 
-export type IdentifierType = 'doi' | 'isbn' | 'handle' | 'arxiv' | 'pmid' | 'url' | 'other';
+export type IdentifierType = 'doi' | 'isbn' | 'handle' | 'arxiv' | 'pmid' | 'pmcid' | 'url' | 'other';
 
 export type SourceIdentifier = {
   id?: string;

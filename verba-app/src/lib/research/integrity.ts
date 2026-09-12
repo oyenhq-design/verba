@@ -140,13 +140,13 @@ export function calculateEvidence(source: NormalizedSource): EvidenceStatus {
   // Check locations array for full text
   if (source.locations && source.locations.length > 0) {
     const hasFullText = source.locations.some(l => l.content_type === 'pdf' || l.content_type === 'html_full_text');
-    if (hasFullText) return 'full_text_available';
+    if (hasFullText) return 'full_text_location_available';
   }
 
   // Fallback: Check lawful full text signals from OpenAlex metadata
   if (source.metadata?.open_access) {
     const oa = source.metadata.open_access as any;
-    if (oa.is_oa && oa.oa_url) return 'full_text_available';
+    if (oa.is_oa && oa.oa_url) return 'full_text_location_available';
   }
   
   if (source.abstract) return 'abstract_available';

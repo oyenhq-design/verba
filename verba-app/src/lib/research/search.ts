@@ -88,14 +88,28 @@ export async function performResearchSearch(query: string): Promise<{ results: R
         matchIndex = i; break;
       }
 
-      // 2. Exact Handle/PMID match
+      // 2. Exact PMID match
       const sourcePmid = source.identifiers?.find(i => i.identifier_type === 'pmid')?.normalized_value;
       const reprPmid = repr.identifiers?.find(i => i.identifier_type === 'pmid')?.normalized_value;
       if (sourcePmid && reprPmid && sourcePmid === reprPmid) {
         matchIndex = i; break;
       }
 
-      // 3. Exact ISBN match (but require title match for chapters to prevent false merges)
+      // 3. Exact PMCID match
+      const sourcePmcid = source.identifiers?.find(i => i.identifier_type === 'pmcid')?.normalized_value;
+      const reprPmcid = repr.identifiers?.find(i => i.identifier_type === 'pmcid')?.normalized_value;
+      if (sourcePmcid && reprPmcid && sourcePmcid === reprPmcid) {
+        matchIndex = i; break;
+      }
+
+      // 4. Exact Handle match
+      const sourceHandle = source.identifiers?.find(i => i.identifier_type === 'handle')?.normalized_value;
+      const reprHandle = repr.identifiers?.find(i => i.identifier_type === 'handle')?.normalized_value;
+      if (sourceHandle && reprHandle && sourceHandle === reprHandle) {
+        matchIndex = i; break;
+      }
+
+      // 5. Exact ISBN match (but require title match for chapters to prevent false merges)
       const sourceIsbn = source.identifiers?.find(i => i.identifier_type === 'isbn')?.normalized_value;
       const reprIsbn = repr.identifiers?.find(i => i.identifier_type === 'isbn')?.normalized_value;
       if (sourceIsbn && reprIsbn && sourceIsbn === reprIsbn) {
@@ -107,7 +121,7 @@ export async function performResearchSearch(query: string): Promise<{ results: R
         }
       }
 
-      // 4. Fallback matching (title + year + author)
+      // 6. Fallback matching (title + year + author)
       const sameTitle = normalizeTitle(repr.title).toLowerCase() === normalizeTitle(source.title).toLowerCase();
       const sameYear = repr.publication_year === source.publication_year;
       if (sameTitle && sameYear) {
