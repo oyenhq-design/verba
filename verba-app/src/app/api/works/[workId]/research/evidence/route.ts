@@ -26,7 +26,7 @@ import {
 } from '@/lib/citations/recovery';
 import { analyzeCandidate, rankCandidates, CandidateAnalysis } from '@/lib/citations/candidateMatch';
 import { extractClaimScope } from '@/lib/citations/scope';
-import { calculateRelevance } from '@/lib/research/integrity';
+import { calculateRelevance, extractAccess } from '@/lib/research/integrity';
 
 const MAX_RESULTS_PER_QUERY = 10;
 const MAX_CANDIDATES_TO_ANALYZE = 8;
@@ -58,9 +58,10 @@ export async function POST(
 
     // 3. Parse body
     const body = await request.json();
-    const { selected_claim, paragraph_context } = body as {
+    const { selected_claim, paragraph_context, is_passage_search } = body as {
       selected_claim?: string;
       paragraph_context?: string;
+      is_passage_search?: boolean;
     };
 
     if (!selected_claim || selected_claim.trim().length < 5) {
@@ -182,6 +183,13 @@ export async function POST(
 
     // Map the deterministic fit labels to Evidence Relationships for the UI
     const mapEvidenceRelationship = (fit: string, evidenceLevel: number) => {
+      if (is_passage_search) {
+        return {
+          relationship: 'Related Research',
+          conversationalText: 'This source is relevant to themes in the selected passage.'
+        };
+      }
+
       // If we only have metadata (level 0), it can never be more than Related Research
       if (evidenceLevel === 0) {
         return {
@@ -210,6 +218,7 @@ export async function POST(
     const candidates = finalRanked.map((c) => {
       const evidenceData = mapEvidenceRelationship(c.fit, c.evidenceLevel);
       const computedRelevance = calculateRelevance(c.source, scope.candidateClaimText);
+      const access = extractAccess(c.source);
       
       return {
         source: c.source,
@@ -228,7 +237,7 @@ export async function POST(
         // Integrate with the standard Integrity shape for the UI
         integrity: {
           retraction: c.retracted ? 'retracted' : 'none',
-          access: { status: c.evidenceLevel >= 2 ? 'open' : 'closed', pdf_url: c.sourceUrl },
+          access: { status: access.status, pdf_url: access.pdf_url },
           identity: { status: c.evidenceLevel >= 1 ? 'confirmed' : 'partial', reasons: [] },
           relevance: computedRelevance,
           evidence_availability: c.evidenceCheckedLabel

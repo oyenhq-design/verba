@@ -134,6 +134,7 @@ export default function WorkspacePage({ params }: { params: { documentId: string
   const [isFocusMode, setIsFocusMode] = useState(false);
   const [isOutlineOpen, setIsOutlineOpen] = useState(false);
   const [isWorkspaceOpen, setIsWorkspaceOpen] = useState(false);
+  const [workspaceTab, setWorkspaceTab] = useState<'assistant' | 'review' | 'research' | 'cite' | 'integrity' | 'prove'>('assistant');
   const [zoomLevel, setZoomLevel] = useState(100);
   const [showZoomMenu, setShowZoomMenu] = useState(false);
 
@@ -774,12 +775,14 @@ export default function WorkspacePage({ params }: { params: { documentId: string
               onAskVerba={(sel) => {
                 setContextualSelection(sel);
                 setIsWorkspaceOpen(true);
+                setWorkspaceTab('assistant');
                 setActiveIssueId(null);
                 setEvidenceSelection(null);
               }}
               onFindEvidence={(sel) => {
                 setEvidenceSelection(sel);
                 setIsWorkspaceOpen(true);
+                setWorkspaceTab('research');
                 setActiveIssueId(null);
                 setContextualSelection(null);
               }}
@@ -793,6 +796,8 @@ export default function WorkspacePage({ params }: { params: { documentId: string
         <VerbaWorkspace
           documentId={params.documentId}
           onClose={() => setIsWorkspaceOpen(false)}
+          activeTab={workspaceTab}
+          onTabChange={setWorkspaceTab}
           blockId={activeIssue?.block_id || contextualSelection?.blockId || evidenceSelection?.blockId || ''}
           paragraphText={activeBlockText || contextualSelection?.paragraphText || evidenceSelection?.paragraphText || ''}
           issues={issues}

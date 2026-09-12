@@ -4,6 +4,7 @@ import { useCitationContext } from './CitationContext';
 import { ResearchResult } from '@/lib/research/types';
 import { NormalizedSource } from '@/lib/sources/types';
 import { ContextualSelection } from '../DocumentEditor';
+import { extractPassageClaims } from '@/lib/citations/scope';
 
 interface ResearchTabProps {
   workId: string | null;
@@ -26,6 +27,13 @@ export function ResearchTab({ workId, onSourceSaved, evidenceSelection, onClearE
   const [isContextExpanded, setIsContextExpanded] = useState(false);
   const [isOverflowing, setIsOverflowing] = useState(false);
   const contextTextRef = useRef<HTMLParagraphElement>(null);
+  
+  // Passage mode state
+  const [researchMode, setResearchMode] = useState<'claim' | 'passage' | 'passage_search' | null>(null);
+  const [passageClaims, setPassageClaims] = useState<string[]>([]);
+  const [activeClaim, setActiveClaim] = useState<string | null>(null);
+  const [visibleClaimsCount, setVisibleClaimsCount] = useState(5);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     setIsContextExpanded(false);
@@ -83,39 +91,71 @@ export function ResearchTab({ workId, onSourceSaved, evidenceSelection, onClearE
     }
   };
 
-  React.useEffect(() => {
-    if (evidenceSelection && workId) {
-      const fetchEvidence = async () => {
-        setLoading(true);
-        setIsEvidenceLoading(true);
-        setErrorMsg('');
-        setResults([]);
-        setProviderStatus(null);
-        setExpandedId(null);
-        
-        try {
-          const res = await fetch(`/api/works/${workId}/research/evidence`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              selected_claim: evidenceSelection.originalText,
-              paragraph_context: evidenceSelection.paragraphText
-            })
-          });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.error || 'Failed to find evidence');
-          
-          setResults(data.results || []);
-          setProviderStatus(data.providerStatus || null);
-        } catch (err: any) {
-          setErrorMsg(err.message);
-        } finally {
-          setLoading(false);
-          setIsEvidenceLoading(false);
-        }
-      };
+  const fetchEvidence = async (targetClaim: string, isPassageSearch: boolean) => {
+    if (!workId || !evidenceSelection) return;
+    
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+
+    setLoading(true);
+    setIsEvidenceLoading(true);
+    setErrorMsg('');
+    setResults([]);
+    setProviderStatus(null);
+    setExpandedId(null);
+    
+    try {
+      const res = await fetch(`/api/works/${workId}/research/evidence`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: abortController.signal,
+        body: JSON.stringify({
+          selected_claim: targetClaim,
+          paragraph_context: evidenceSelection.paragraphText,
+          is_passage_search: isPassageSearch
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to find evidence');
       
-      fetchEvidence();
+      setResults(data.results || []);
+      setProviderStatus(data.providerStatus || null);
+    } catch (err: any) {
+      if (err.name === 'AbortError') return;
+      setErrorMsg(err.message);
+    } finally {
+      if (!abortController.signal.aborted) {
+        setLoading(false);
+        setIsEvidenceLoading(false);
+      }
+    }
+  };
+
+  React.useEffect(() => {
+    if (!evidenceSelection || !workId) {
+      setResearchMode(null);
+      setPassageClaims([]);
+      setActiveClaim(null);
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      return;
+    }
+    
+    const claims = extractPassageClaims(evidenceSelection.originalText);
+    setPassageClaims(claims);
+    setVisibleClaimsCount(5);
+    setActiveClaim(null);
+    
+    // Deterministic rule: 3+ claims triggers passage mode
+    const mode = claims.length >= 3 ? 'passage' : 'claim';
+    setResearchMode(mode);
+    
+    if (mode === 'claim') {
+      fetchEvidence(evidenceSelection.originalText, false);
     }
   }, [evidenceSelection, workId]);
 
@@ -224,21 +264,20 @@ export function ResearchTab({ workId, onSourceSaved, evidenceSelection, onClearE
           <div className="mt-3 p-3 bg-accent/5 border border-accent/20 rounded relative text-[12px]">
             <button 
               onClick={onClearEvidenceSelection}
-              className="absolute top-2 right-2 text-foreground-muted hover:text-foreground-secondary transition-colors"
+              className="absolute top-2 right-2 text-foreground-muted hover:text-foreground-secondary z-10 transition-colors"
               title="Clear evidence search"
             >
-              <Loader2 size={14} className="hidden" /> 
               &times;
             </button>
             <span className="font-semibold text-accent flex items-center gap-1.5 mb-1">
               <Sparkles size={12} />
-              Looking for evidence for
+              {researchMode === 'passage' && !activeClaim ? 'Several claims found in this passage' : 'Looking for evidence for'}
             </span>
             <p 
               ref={contextTextRef}
               className={`text-[#0B1628] leading-relaxed italic border-l-2 border-accent/30 pl-2 ${isContextExpanded ? '' : 'line-clamp-3'}`}
             >
-              "{evidenceSelection.originalText}"
+              "{activeClaim || evidenceSelection.originalText}"
             </p>
             {(isOverflowing || isContextExpanded) && (
               <button 
@@ -248,6 +287,66 @@ export function ResearchTab({ workId, onSourceSaved, evidenceSelection, onClearE
                 {isContextExpanded ? 'Show less' : 'Show more'}
                 <ChevronDown size={12} className={`transform transition-transform ${isContextExpanded ? 'rotate-180' : ''}`} />
               </button>
+            )}
+            
+            {/* Passage Mode Claim Picker */}
+            {researchMode === 'passage' && !activeClaim && (
+              <div className="mt-3 pt-3 border-t border-accent/20">
+                <p className="text-foreground-secondary mb-3">This passage contains multiple statements. Choose one to investigate:</p>
+                <div className="space-y-2">
+                  {passageClaims.slice(0, visibleClaimsCount).map((claim, idx) => (
+                    <div key={idx} className="bg-white border border-border-light rounded p-2 flex flex-col gap-2 shadow-sm">
+                      <p className="text-[#0B1628] leading-snug">"{claim}"</p>
+                      <button
+                        onClick={() => {
+                          setActiveClaim(claim);
+                          setResearchMode('claim');
+                          fetchEvidence(claim, false);
+                        }}
+                        className="self-end text-accent font-medium hover:underline flex items-center gap-1 text-[11px]"
+                      >
+                        Find evidence
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                {passageClaims.length > visibleClaimsCount && (
+                  <button
+                    onClick={() => setVisibleClaimsCount(prev => prev + 3)}
+                    className="w-full mt-2 py-1.5 text-accent font-medium text-center border border-accent/20 rounded hover:bg-accent/5 transition-colors"
+                  >
+                    Show {passageClaims.length - visibleClaimsCount} more
+                  </button>
+                )}
+                <div className="mt-4 pt-3 border-t border-accent/20">
+                  <button
+                    onClick={() => {
+                      setResearchMode('passage_search');
+                      fetchEvidence(evidenceSelection.originalText, true);
+                    }}
+                    className="w-full py-2 bg-white border border-border-light rounded text-[#0B1628] font-medium hover:bg-border-light transition-colors text-center"
+                  >
+                    Search around the whole passage
+                  </button>
+                </div>
+              </div>
+            )}
+            
+            {/* Return to claims button */}
+            {activeClaim && passageClaims.length >= 3 && (
+              <div className="mt-2 pt-2 border-t border-accent/20">
+                <button
+                  onClick={() => {
+                    setActiveClaim(null);
+                    setResearchMode('passage');
+                    setResults([]);
+                    setProviderStatus(null);
+                  }}
+                  className="text-accent font-medium hover:underline text-[11px] flex items-center gap-1"
+                >
+                  &larr; Back to claims
+                </button>
+              </div>
             )}
           </div>
         )}
@@ -391,11 +490,23 @@ export function ResearchTab({ workId, onSourceSaved, evidenceSelection, onClearE
                         <span className="font-semibold text-foreground-secondary block mb-1">Open Access</span>
                         <div className="text-foreground-secondary">
                           Status: {renderStatus(r.integrity.access.status)}
-                          {r.integrity.access.pdf_url && (
+                          {r.integrity.access.pdf_url ? (
                             <a href={r.integrity.access.pdf_url} target="_blank" rel="noreferrer" className="block text-accent hover:underline mt-0.5 flex items-center gap-1">
                               View PDF <ExternalLink size={10} />
                             </a>
-                          )}
+                          ) : r.integrity.access.status === 'open' && r.source.url ? (
+                            <a href={r.source.url} target="_blank" rel="noreferrer" className="block text-accent hover:underline mt-0.5 flex items-center gap-1">
+                              Open full text <ExternalLink size={10} />
+                            </a>
+                          ) : r.source.doi ? (
+                            <a href={`https://doi.org/${r.source.doi}`} target="_blank" rel="noreferrer" className="block text-accent hover:underline mt-0.5 flex items-center gap-1">
+                              View publication <ExternalLink size={10} />
+                            </a>
+                          ) : r.source.url ? (
+                            <a href={r.source.url} target="_blank" rel="noreferrer" className="block text-accent hover:underline mt-0.5 flex items-center gap-1">
+                              Open source <ExternalLink size={10} />
+                            </a>
+                          ) : null}
                         </div>
                       </div>
                     </div>

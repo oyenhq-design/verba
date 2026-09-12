@@ -12,6 +12,8 @@ import { ContextualSelection } from '../DocumentEditor';
 interface Props {
   documentId: string;
   onClose: () => void;
+  activeTab: WorkspaceTab;
+  onTabChange: (tab: WorkspaceTab) => void;
   // Assistant Props
   blockId: string;
   paragraphText: string;
@@ -72,14 +74,9 @@ export function VerbaWorkspace({
   onSourceSaved,
   onReplaceCitation,
   onAddSupportingCitation,
+  activeTab,
+  onTabChange,
 }: Props) {
-  const [activeTab, setActiveTab] = useState<WorkspaceTab>('assistant');
-
-  React.useEffect(() => {
-    if (evidenceSelection) {
-      setActiveTab('research');
-    }
-  }, [evidenceSelection]);
 
   return (
     <aside className="w-[340px] bg-white border-l border-border-light shrink-0 flex flex-col h-full relative z-20 shadow-[-4px_0_24px_rgba(0,0,0,0.02)] md:shadow-none transition-all duration-300">
@@ -100,7 +97,7 @@ export function VerbaWorkspace({
         </button>
       </div>
 
-      <WorkspaceNavigation activeTab={activeTab} onTabChange={setActiveTab} />
+      <WorkspaceNavigation activeTab={activeTab} onTabChange={onTabChange} />
 
       <div className="flex-1 overflow-hidden flex flex-col">
         {activeTab === 'assistant' && (
@@ -157,7 +154,7 @@ export function VerbaWorkspace({
             documentId={documentId}
             workId={workId}
             projectContext={projectContext}
-            onNavigate={(tab) => setActiveTab(tab)}
+            onNavigate={(tab) => onTabChange(tab)}
             onReplaceCitation={onReplaceCitation}
             onAddSupportingCitation={onAddSupportingCitation}
           />

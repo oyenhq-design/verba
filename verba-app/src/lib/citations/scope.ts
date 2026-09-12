@@ -30,6 +30,11 @@ export type ClaimScope = {
   candidateClaimText: string;
   /** Atomic claims extracted from the sentence (if multi-clause). */
   atomicClaims: string[];
+  /** 
+   * Decomposed claims for the entire selection if it spans multiple assertions.
+   * Defaults to [] to preserve backwards compatibility.
+   */
+  passageClaims?: string[];
   /** Deterministic SHA/fingerprint hash of normalized claim text + citationId + sourceId. */
   claimHash: string;
 };
@@ -99,6 +104,7 @@ export function extractClaimScope(
       paragraphContext: '',
       candidateClaimText: '',
       atomicClaims: [],
+      passageClaims: [],
       claimHash: generateClaimHash('', citationId, sourceId),
     };
   }
@@ -118,9 +124,10 @@ export function extractClaimScope(
   const primarySentence = sentences.length > 0 ? sentences[0] : cleaned;
 
   // Extract atomic claims if sentence has multi-clause items
+  // We only split on semicolons now to avoid producing broken fragments.
   const atomicClaims: string[] = [];
   const parts = primarySentence
-    .split(/[;]|\band\b|\bwhile\b|\bwhereas\b/i)
+    .split(/[;]/)
     .map(p => p.trim())
     .filter(p => p.length > 10);
 
@@ -131,7 +138,6 @@ export function extractClaimScope(
   }
 
   // Hash over the full candidateClaimText for better stale detection
-  // (if only one sentence changed in a methodology paragraph, we want to detect it)
   const claimHash = generateClaimHash(candidateClaimText, citationId, sourceId);
 
   return {
@@ -141,6 +147,47 @@ export function extractClaimScope(
     paragraphContext,
     candidateClaimText,
     atomicClaims,
+    passageClaims: extractPassageClaims(fullText),
     claimHash,
   };
+}
+
+/**
+ * Deterministically extracts a list of meaningful distinct claims from a larger passage.
+ * Used for detecting Passage Mode in Research.
+ */
+export function extractPassageClaims(text: string): string[] {
+  if (!text || !text.trim()) return [];
+  
+  const cleaned = stripCitationArtefacts(text.trim());
+  const sentences = cleaned.split(/(?<=[.!?])\s+|\n+/).filter(s => s.trim().length > 0);
+  
+  const allClaims: string[] = [];
+  
+  for (const sentence of sentences) {
+    // Filter out very short fragments or things that look like headings (no punctuation)
+    if (sentence.length < 15) continue;
+    
+    // Split conservatively only on semicolons to avoid fragments
+    const parts = sentence.split(/[;]/).map(p => p.trim()).filter(p => p.length >= 15);
+    allClaims.push(...parts);
+  }
+
+  // Deduplicate using simple lowercase containment check
+  const distinctClaims: string[] = [];
+  for (const claim of allClaims) {
+    const normalized = claim.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const isDup = distinctClaims.some(existing => {
+      const existNorm = existing.toLowerCase().replace(/[^a-z0-9]/g, '');
+      // If one is substantially a substring of the other, treat as duplicate
+      return existNorm.includes(normalized) || normalized.includes(existNorm);
+    });
+    
+    if (!isDup && distinctClaims.length < 8) {
+      // Small cleanup for readability (trim trailing punctuation like periods if they were captured oddly, though sentence splitting handles most)
+      distinctClaims.push(claim);
+    }
+  }
+
+  return distinctClaims;
 }
