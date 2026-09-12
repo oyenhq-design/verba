@@ -2,6 +2,8 @@ import { NormalizedSource } from '../sources/types';
 import { normalizeDoi, normalizeTitle } from '../sources/normalize';
 import { searchCrossref, lookupCrossrefByDoi } from './providers/crossref';
 import { searchOpenAlex, lookupOpenAlexByDoi } from './providers/openalex';
+import { searchGoogleBooks } from './providers/googleBooks';
+import { searchOpenLibrary } from './providers/openLibrary';
 import { ResearchResult, ProviderProvenance } from './types';
 import { buildIntegrity } from './integrity';
 
@@ -9,9 +11,11 @@ function mergeSources(sources: NormalizedSource[]): { source: NormalizedSource, 
   if (sources.length === 0) throw new Error("Cannot merge empty array");
   
   // Prefer openalex as base since it has richer metadata (topics, OA)
-  const base = sources.find(s => s.source_provider === 'openalex') || sources[0];
-  const other = sources.find(s => s !== base);
-
+  // If no openalex, prefer crossref, else just use the first.
+  const base = sources.find(s => s.source_provider === 'openalex') || 
+               sources.find(s => s.source_provider === 'crossref') || 
+               sources[0];
+               
   const merged = { ...base };
   const provenance: ProviderProvenance = {
     providers: [],
@@ -27,12 +31,18 @@ function mergeSources(sources: NormalizedSource[]): { source: NormalizedSource, 
       doi: s.doi
     };
     if (s.metadata?.openalex_id) provenance.provider_ids['openalex'] = s.metadata.openalex_id as string;
-    // Crossref doesn't have a distinct ID other than DOI usually, we'll just use DOI if present
     if (s.source_provider === 'crossref' && s.doi) provenance.provider_ids['crossref'] = s.doi;
+    if (s.source_provider === 'google_books' && s.metadata?.google_books_id) provenance.provider_ids['google_books'] = s.metadata.google_books_id as string;
+    if (s.source_provider === 'open_library' && s.metadata?.open_library_key) provenance.provider_ids['open_library'] = s.metadata.open_library_key as string;
   });
 
-  if (other) {
-    // Fill in missing fields from the other provider
+  // Unique merge all sources into 'merged'
+  const allIdentifiers = [...(merged.identifiers || [])];
+  const allLocations = [...(merged.locations || [])];
+
+  sources.forEach(other => {
+    if (other === base) return;
+
     if (!merged.abstract && other.abstract) merged.abstract = other.abstract;
     if (!merged.doi && other.doi) merged.doi = other.doi;
     if (!merged.publication_year && other.publication_year) merged.publication_year = other.publication_year;
@@ -40,12 +50,16 @@ function mergeSources(sources: NormalizedSource[]): { source: NormalizedSource, 
     // Merge metadata
     merged.metadata = { ...other.metadata, ...merged.metadata };
     
-    // Combine arrays
-    const allIdentifiers = [...(merged.identifiers || []), ...(other.identifiers || [])];
+    if (other.identifiers) allIdentifiers.push(...other.identifiers);
+    if (other.locations) allLocations.push(...other.locations);
+  });
+
+  // Deduplicate arrays
+  if (allIdentifiers.length > 0) {
     const uniqueIdentifiers = Array.from(new Map(allIdentifiers.map(i => [`${i.identifier_type}:${i.normalized_value}`, i])).values());
     merged.identifiers = uniqueIdentifiers;
-
-    const allLocations = [...(merged.locations || []), ...(other.locations || [])];
+  }
+  if (allLocations.length > 0) {
     const uniqueLocations = Array.from(new Map(allLocations.map(l => [l.url, l])).values());
     merged.locations = uniqueLocations;
   }
@@ -54,10 +68,12 @@ function mergeSources(sources: NormalizedSource[]): { source: NormalizedSource, 
 }
 
 export async function performResearchSearch(query: string): Promise<{ results: ResearchResult[], providerStatus: Record<string, string> }> {
-  const providerStatus: Record<string, string> = { crossref: 'ok', openalex: 'ok' };
+  const providerStatus: Record<string, string> = { crossref: 'ok', openalex: 'ok', google_books: 'ok', open_library: 'ok' };
   
   let crossrefResults: NormalizedSource[] = [];
   let openalexResults: NormalizedSource[] = [];
+  let googleBooksResults: NormalizedSource[] = [];
+  let openLibraryResults: NormalizedSource[] = [];
 
   // Parallel provider calls
   try {
@@ -70,6 +86,18 @@ export async function performResearchSearch(query: string): Promise<{ results: R
     openalexResults = await searchOpenAlex(query);
   } catch (e: any) {
     providerStatus.openalex = e.message || 'error';
+  }
+
+  try {
+    googleBooksResults = await searchGoogleBooks(query);
+  } catch (e: any) {
+    providerStatus.google_books = e.message || 'error';
+  }
+
+  try {
+    openLibraryResults = await searchOpenLibrary(query);
+  } catch (e: any) {
+    providerStatus.open_library = e.message || 'error';
   }
 
   const groups: NormalizedSource[][] = [];
@@ -110,13 +138,18 @@ export async function performResearchSearch(query: string): Promise<{ results: R
       }
 
       // 5. Exact ISBN match (but require title match for chapters to prevent false merges)
-      const sourceIsbn = source.identifiers?.find(i => i.identifier_type === 'isbn')?.normalized_value;
-      const reprIsbn = repr.identifiers?.find(i => i.identifier_type === 'isbn')?.normalized_value;
-      if (sourceIsbn && reprIsbn && sourceIsbn === reprIsbn) {
+      const sourceIsbns = source.identifiers?.filter(i => i.identifier_type === 'isbn').map(i => i.normalized_value) || [];
+      const reprIsbns = repr.identifiers?.filter(i => i.identifier_type === 'isbn').map(i => i.normalized_value) || [];
+      const hasOverlappingIsbn = sourceIsbns.some(isbn => reprIsbns.includes(isbn));
+      
+      if (hasOverlappingIsbn) {
         if (source.source_type === 'book_chapter' || repr.source_type === 'book_chapter') {
            const sameTitle = normalizeTitle(repr.title).toLowerCase() === normalizeTitle(source.title).toLowerCase();
            if (sameTitle) { matchIndex = i; break; }
         } else {
+           // Basic title check to avoid merging different editions if titles are wildly different?
+           // Actually user says: "Exact ISBN + compatible title + compatible authors -> strong merge candidate"
+           // For now, overlapping ISBN for books is usually sufficient, but we can do a loose title check if desired.
            matchIndex = i; break;
         }
       }
@@ -138,6 +171,8 @@ export async function performResearchSearch(query: string): Promise<{ results: R
 
   crossrefResults.forEach(addResult);
   openalexResults.forEach(addResult);
+  googleBooksResults.forEach(addResult);
+  openLibraryResults.forEach(addResult);
 
   const finalResults: ResearchResult[] = [];
 

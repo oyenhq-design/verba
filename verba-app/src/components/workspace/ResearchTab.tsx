@@ -3,6 +3,7 @@ import { Search, Loader2, BookOpen, ExternalLink, ShieldAlert, CheckCircle, Aler
 import { useCitationContext } from './CitationContext';
 import { ResearchResult } from '@/lib/research/types';
 import { NormalizedSource } from '@/lib/sources/types';
+import { getSourceTrackId } from '@/lib/sources/normalize';
 import { ContextualSelection } from '../DocumentEditor';
 import { extractPassageClaims } from '@/lib/citations/scope';
 
@@ -160,8 +161,8 @@ export function ResearchTab({ workId, onSourceSaved, evidenceSelection, onClearE
   }, [evidenceSelection, workId]);
 
   const handleSave = async (result: ResearchResult) => {
-    // Generate a temporary ID for tracking saving state if DOI is missing
-    const trackId = result.source.doi || result.source.title;
+    // Generate a temporary ID for tracking saving state
+    const trackId = getSourceTrackId(result.source);
     setSavingId(trackId);
     try {
       // Map ResearchResult into a payload compatible with the existing sources route
@@ -203,7 +204,7 @@ export function ResearchTab({ workId, onSourceSaved, evidenceSelection, onClearE
   };
 
   const handleCite = async (result: ResearchResult) => {
-    const trackId = result.source.doi || result.source.title;
+    const trackId = getSourceTrackId(result.source);
     // Attempt to save first
     let sourceId: string | null = null;
     if (!savedIds.has(trackId)) {
@@ -381,7 +382,7 @@ export function ResearchTab({ workId, onSourceSaved, evidenceSelection, onClearE
           </div>
         ) : (
           results.map((r, idx) => {
-            const trackId = r.source.doi || r.source.title;
+            const trackId = getSourceTrackId(r.source);
             const isSaved = savedIds.has(trackId);
             const isSaving = savingId === trackId;
             const isExpanded = expandedId === trackId;
@@ -410,6 +411,13 @@ export function ResearchTab({ workId, onSourceSaved, evidenceSelection, onClearE
                       </div>
                     </div>
                   )}
+                  
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="px-1.5 py-0.5 bg-foreground-muted/10 text-foreground-secondary rounded text-[10px] font-semibold uppercase tracking-wider">
+                      {r.source.source_type.replace('_', ' ')}
+                    </span>
+                  </div>
+                  
                   <h4 className="font-semibold text-[#0B1628] leading-tight mb-1">{r.source.title}</h4>
                   <div className="text-foreground-secondary text-[12px]">
                     {r.source.authors.map(a => `${a.given} ${a.family}`).join(', ')}

@@ -21,6 +21,51 @@ export function normalizeTitle(title: string): string {
   return title.trim().replace(/\s+/g, ' ');
 }
 
+export function getSourceTrackId(source: any): string {
+  // 1. DOI
+  if (source.doi) return `doi:${normalizeDoi(source.doi)}`;
+  const identifiers = source.identifiers || [];
+  const getId = (type: string) => identifiers.find((i: any) => i.identifier_type === type)?.normalized_value;
+  
+  const doi = getId('doi');
+  if (doi) return `doi:${normalizeDoi(doi)}`;
+
+  // 2. arXiv
+  const arxiv = getId('arxiv');
+  if (arxiv) return `arxiv:${arxiv}`;
+
+  // 3. PMID
+  const pmid = getId('pmid');
+  if (pmid) return `pmid:${pmid}`;
+
+  // 4. PMCID
+  const pmcid = getId('pmcid');
+  if (pmcid) return `pmcid:${pmcid}`;
+
+  // 5. ISBN + normalized title
+  const isbn = getId('isbn');
+  const normTitle = source.title ? normalizeTitle(source.title).toLowerCase() : '';
+  if (isbn && normTitle) return `isbn:${isbn}:${normTitle}`;
+
+  // 6. HANDLE
+  const handle = getId('handle');
+  if (handle) return `handle:${handle}`;
+
+  // 7. normalized title + first author + year
+  let firstAuthor = '';
+  if (source.authors && source.authors.length > 0) {
+    firstAuthor = source.authors[0].family.toLowerCase();
+  }
+  const year = source.publication_year || '';
+  
+  if (normTitle) {
+    return `fallback:${normTitle}:${firstAuthor}:${year}`;
+  }
+
+  // Absolute fallback
+  return `unknown:${Math.random().toString(36).substring(7)}`;
+}
+
 export const SourceSchema = z.object({
   source_type: z.enum([
     'journal_article',
@@ -32,6 +77,7 @@ export const SourceSchema = z.object({
     'website',
     'dataset',
     'standard',
+    'preprint',
     'other'
   ]),
   title: z.string().min(1, "Title is required").transform(normalizeTitle),
@@ -53,6 +99,10 @@ export const SourceSchema = z.object({
     'openalex',
     'crossref',
     'semantic_scholar',
+    'google_books',
+    'open_library',
+    'arxiv',
+    'serper',
     'imported'
   ]).default('manual'),
   metadata: z.record(z.string(), z.unknown()).default({}),

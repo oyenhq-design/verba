@@ -8,6 +8,7 @@ export type SourceType =
   | 'website'
   | 'dataset'
   | 'standard'
+  | 'preprint'
   | 'other';
 
 export type SourceProvider =
@@ -15,6 +16,10 @@ export type SourceProvider =
   | 'openalex'
   | 'crossref'
   | 'semantic_scholar'
+  | 'google_books'
+  | 'open_library'
+  | 'arxiv'
+  | 'serper'
   | 'imported';
 
 export type SourceAuthor = {
