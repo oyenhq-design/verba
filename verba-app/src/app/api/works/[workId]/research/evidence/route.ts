@@ -32,6 +32,41 @@ import { upsertClaim } from '@/lib/evidence/claims';
 const MAX_RESULTS_PER_QUERY = 10;
 const MAX_CANDIDATES_TO_ANALYZE = 8;
 
+/**
+ * Evaluates whether the currently discovered candidate pool is strong enough
+ * to skip fallback execution or stop query relaxation.
+ */
+function isEvidenceSufficient(finalRanked: CandidateAnalysis[], mode: string): boolean {
+  if (mode === 'intended_source') {
+    return finalRanked.some(
+      c =>
+        c.fit === 'likely_intended_source' &&
+        c.score.anchorScore >= 10 &&
+        c.evidenceLevel >= 1 &&
+        !c.retracted
+    );
+  } else if (mode === 'supporting_research') {
+    return finalRanked.filter(
+      c =>
+        !c.retracted &&
+        (c.fit === 'likely_intended_source' || c.fit === 'possible_supporting_source')
+    ).length >= 2;
+  } else {
+    return finalRanked.filter(
+      c => !c.retracted && c.score.anchorScore >= 6
+    ).length >= 2;
+  }
+}
+
+function shouldRunEvidenceFallback(finalRanked: CandidateAnalysis[], mode: string): boolean {
+  // If we already have a very strong source, no need for fallback
+  if (isEvidenceSufficient(finalRanked, mode)) return false;
+
+  // Otherwise, run fallback if we have fewer than 4 usable structured results
+  const usableCount = finalRanked.filter(c => !c.retracted && c.score.anchorScore >= 4).length;
+  return usableCount < 4;
+}
+
 export async function POST(
   request: Request,
   { params }: { params: { workId: string } }
@@ -134,6 +169,7 @@ export async function POST(
     for (const stageQueries of queriesByStage) {
       if (stageQueries.length === 0) continue;
 
+      // --- PRIMARY PROVIDERS ---
       await Promise.all(
         stageQueries.map(async (q) => {
           const { rawCandidates: batchCandidates, providerStatus: batchStatus } = await executeProviders(plan.primaryProviders, q.query);
@@ -149,10 +185,10 @@ export async function POST(
         })
       );
 
-      const deduplicated = deduplicateCandidates(rawCandidates);
+      let deduplicated = deduplicateCandidates(rawCandidates);
       finalDeduplicatedCount = deduplicated.length;
 
-      const scored = deduplicated
+      let scored = deduplicated
         .map(({ source, providers }) => ({
           source,
           providers,
@@ -160,37 +196,51 @@ export async function POST(
         }))
         .sort((a, b) => b.score.totalScore - a.score.totalScore);
 
-      const topCandidates = scored.slice(0, MAX_CANDIDATES_TO_ANALYZE);
-      const analyses: CandidateAnalysis[] = topCandidates.map(({ source, providers }) =>
+      let topCandidates = scored.slice(0, MAX_CANDIDATES_TO_ANALYZE);
+      let analyses: CandidateAnalysis[] = topCandidates.map(({ source, providers }) =>
         analyzeCandidate(source, providers, fingerprint, mode)
       );
 
       finalRanked = rankCandidates(analyses);
 
-      let shouldStop = false;
-
-      // For evidence finding, stop if we found at least 2 good sources
-      if (mode === 'intended_source') {
-        shouldStop = finalRanked.some(
-          c =>
-            c.fit === 'likely_intended_source' &&
-            c.score.anchorScore >= 10 &&
-            c.evidenceLevel >= 1 &&
-            !c.retracted
+      // --- FALLBACK CHECK ---
+      if (shouldRunEvidenceFallback(finalRanked, mode) && plan.fallbackProviders.length > 0) {
+        await Promise.all(
+          stageQueries.map(async (q) => {
+            const { rawCandidates: batchCandidates, providerStatus: batchStatus } = await executeProviders(plan.fallbackProviders, q.query);
+            
+            for (const c of batchCandidates) {
+               rawCandidates.push(c);
+            }
+            
+            // Merge provider status safely
+            for (const [p, s] of Object.entries(batchStatus)) {
+               providerStatus[p] = s.error ? s.error : s.status;
+            }
+          })
         );
-      } else if (mode === 'supporting_research') {
-        shouldStop = finalRanked.filter(
-          c =>
-            !c.retracted &&
-            (c.fit === 'likely_intended_source' || c.fit === 'possible_supporting_source')
-        ).length >= 2;
-      } else {
-        shouldStop = finalRanked.filter(
-          c => !c.retracted && c.score.anchorScore >= 6
-        ).length >= 2;
+
+        // Re-process with fallback results included
+        deduplicated = deduplicateCandidates(rawCandidates);
+        finalDeduplicatedCount = deduplicated.length;
+
+        scored = deduplicated
+          .map(({ source, providers }) => ({
+            source,
+            providers,
+            score: scoreCandidate(source, fingerprint),
+          }))
+          .sort((a, b) => b.score.totalScore - a.score.totalScore);
+
+        topCandidates = scored.slice(0, MAX_CANDIDATES_TO_ANALYZE);
+        analyses = topCandidates.map(({ source, providers }) =>
+          analyzeCandidate(source, providers, fingerprint, mode)
+        );
+
+        finalRanked = rankCandidates(analyses);
       }
 
-      if (shouldStop) {
+      if (isEvidenceSufficient(finalRanked, mode)) {
         break; // Stop progressive relaxation
       }
     }

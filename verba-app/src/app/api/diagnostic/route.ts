@@ -2,9 +2,16 @@ import { NextResponse } from 'next/server';
 import { searchOpenAlex } from '@/lib/research/providers/openalex';
 import { searchCrossref } from '@/lib/research/providers/crossref';
 import { performResearchSearch } from '@/lib/research/search';
+import { createClient } from '@/lib/supabase/server';
 
 export async function GET(request: Request) {
   try {
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const url = new URL(request.url);
     const query = url.searchParams.get('q') || 'gas flaring Nigeria';
     

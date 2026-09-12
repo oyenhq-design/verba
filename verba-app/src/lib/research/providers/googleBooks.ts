@@ -7,7 +7,7 @@ export async function searchGoogleBooks(query: string, maxResults: number = 10):
   if (!apiKey) {
     // Graceful degradation if key is absent
     console.warn('GOOGLE_BOOKS_API_KEY is missing. Skipping Google Books provider.');
-    return [];
+    throw new Error('disabled_missing_configuration');
   }
 
   try {
@@ -16,17 +16,33 @@ export async function searchGoogleBooks(query: string, maxResults: number = 10):
     url.searchParams.append('maxResults', maxResults.toString());
     url.searchParams.append('key', apiKey);
 
-    const res = await fetch(url.toString(), {
-      method: 'GET',
-      headers: {
-        'Accept': 'application/json'
+    let res: Response;
+    try {
+      res = await fetch(url.toString(), {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' },
+        signal: AbortSignal.timeout(10000)
+      });
+      if (res.status === 503) {
+        // One short retry for transient 503s
+        await new Promise(r => setTimeout(r, 500));
+        res = await fetch(url.toString(), {
+          method: 'GET',
+          headers: { 'Accept': 'application/json' },
+          signal: AbortSignal.timeout(10000)
+        });
       }
-    });
+    } catch (fetchErr: any) {
+      if (fetchErr.name === 'TimeoutError') {
+        throw new Error('Request timed out');
+      }
+      throw fetchErr;
+    }
 
     if (!res.ok) {
       if (res.status === 403 || res.status === 429) {
          console.warn(`Google Books API rate limit or auth error: ${res.status}`);
-         return [];
+         throw new Error(`rate limit or auth error: ${res.status}`);
       }
       throw new Error(`Google Books API error: ${res.status} ${res.statusText}`);
     }
@@ -146,7 +162,6 @@ export async function searchGoogleBooks(query: string, maxResults: number = 10):
 
   } catch (error: any) {
     console.error('Google Books Provider Error:', error.message);
-    // Provider fails independently
-    return [];
+    throw error;
   }
 }

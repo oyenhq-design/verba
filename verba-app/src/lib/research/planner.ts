@@ -208,7 +208,7 @@ export function planResearchQuery(originalQuery: string, mode: SearchMode): Rese
     familiesArray.push('preprints');
   }
   
-  if (norm.includes(' book ') || norm.includes(' textbook ') || norm.includes(' handbook ')) {
+  if (norm.includes(' book ') || norm.includes(' books ') || norm.includes(' textbook ') || norm.includes(' handbook ')) {
      if (!hasNegative) {
        primaryProviders.add('google_books');
        primaryProviders.add('open_library');

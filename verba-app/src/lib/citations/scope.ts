@@ -61,6 +61,8 @@ function stripCitationArtefacts(text: string): string {
 
 // ─── Hash ─────────────────────────────────────────────────────────────────────
 
+import { normalizeClaimText } from '../evidence/normalize';
+
 /**
  * Simple deterministic string hash for claim text fingerprinting.
  */
@@ -69,7 +71,7 @@ export function generateClaimHash(
   citationId: string,
   sourceId: string | null
 ): string {
-  const str = `${citationId}:${sourceId || 'none'}:${claimText.trim().toLowerCase().replace(/\s+/g, ' ')}`;
+  const str = `${citationId}:${sourceId || 'none'}:${normalizeClaimText(claimText)}`;
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
     const char = str.charCodeAt(i);

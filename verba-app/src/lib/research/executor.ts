@@ -5,7 +5,6 @@ import { searchOpenLibrary } from './providers/openLibrary';
 import { searchArxiv } from './providers/arxiv';
 import { searchSerper } from './providers/serper';
 import { SourceProvider, NormalizedSource } from '../sources/types';
-import { ResearchPlan } from './planner';
 
 export type ProviderExecutionStatus =
   | 'planned'
@@ -70,8 +69,13 @@ export async function executeProviders(providers: SourceProvider[], query: strin
           rawCandidates.push({ source: r, provider });
         }
       } catch (err: any) {
-        providerStatus[provider].status = 'failed';
-        providerStatus[provider].error = err.message || 'error';
+        const msg = err.message || 'error';
+        if (msg === 'disabled_missing_configuration') {
+          providerStatus[provider].status = 'disabled_missing_configuration';
+        } else {
+          providerStatus[provider].status = 'failed';
+          providerStatus[provider].error = msg;
+        }
       }
     })
   );
