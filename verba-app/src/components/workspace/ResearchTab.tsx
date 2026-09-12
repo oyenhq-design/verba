@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Search, Loader2, BookOpen, ExternalLink, ShieldAlert, CheckCircle, AlertTriangle, ChevronDown, Plus, Sparkles } from 'lucide-react';
 import { useCitationContext } from './CitationContext';
 import { ResearchResult } from '@/lib/research/types';
@@ -22,6 +22,26 @@ export function ResearchTab({ workId, onSourceSaved, evidenceSelection, onClearE
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
+  const [isEvidenceLoading, setIsEvidenceLoading] = useState(false);
+  const [isContextExpanded, setIsContextExpanded] = useState(false);
+  const [isOverflowing, setIsOverflowing] = useState(false);
+  const contextTextRef = useRef<HTMLParagraphElement>(null);
+
+  useEffect(() => {
+    setIsContextExpanded(false);
+  }, [evidenceSelection]);
+
+  useEffect(() => {
+    const checkOverflow = () => {
+      if (contextTextRef.current && !isContextExpanded) {
+        setIsOverflowing(contextTextRef.current.scrollHeight > contextTextRef.current.clientHeight);
+      }
+    };
+    // Slight delay to ensure DOM is fully laid out
+    setTimeout(checkOverflow, 0);
+    window.addEventListener('resize', checkOverflow);
+    return () => window.removeEventListener('resize', checkOverflow);
+  }, [evidenceSelection, isContextExpanded]);
 
   if (!workId) {
     return (
@@ -67,6 +87,7 @@ export function ResearchTab({ workId, onSourceSaved, evidenceSelection, onClearE
     if (evidenceSelection && workId) {
       const fetchEvidence = async () => {
         setLoading(true);
+        setIsEvidenceLoading(true);
         setErrorMsg('');
         setResults([]);
         setProviderStatus(null);
@@ -90,6 +111,7 @@ export function ResearchTab({ workId, onSourceSaved, evidenceSelection, onClearE
           setErrorMsg(err.message);
         } finally {
           setLoading(false);
+          setIsEvidenceLoading(false);
         }
       };
       
@@ -212,18 +234,45 @@ export function ResearchTab({ workId, onSourceSaved, evidenceSelection, onClearE
               <Sparkles size={12} />
               Looking for evidence for
             </span>
-            <p className="text-[#0B1628] leading-relaxed italic border-l-2 border-accent/30 pl-2">
+            <p 
+              ref={contextTextRef}
+              className={`text-[#0B1628] leading-relaxed italic border-l-2 border-accent/30 pl-2 ${isContextExpanded ? '' : 'line-clamp-3'}`}
+            >
               "{evidenceSelection.originalText}"
             </p>
+            {(isOverflowing || isContextExpanded) && (
+              <button 
+                onClick={() => setIsContextExpanded(!isContextExpanded)}
+                className="text-accent text-[11px] font-medium hover:underline mt-1.5 flex items-center gap-1"
+              >
+                {isContextExpanded ? 'Show less' : 'Show more'}
+                <ChevronDown size={12} className={`transform transition-transform ${isContextExpanded ? 'rotate-180' : ''}`} />
+              </button>
+            )}
           </div>
         )}
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {loading ? (
-          <div className="flex flex-col items-center justify-center h-full text-foreground-muted">
-            <Loader2 size={24} className="animate-spin mb-2" />
-            <span className="text-[12px]">Searching scholarly providers...</span>
+          <div className="flex flex-col items-center justify-center h-full text-foreground-muted animate-in fade-in duration-300">
+            {isEvidenceLoading ? (
+              <>
+                <div className="flex items-center gap-2 mb-2 font-medium text-accent">
+                  <Sparkles size={16} />
+                  Looking for evidence...
+                </div>
+                <div className="flex items-center gap-2 text-[12px] mb-4">
+                  <Loader2 size={14} className="animate-spin" />
+                  Searching scholarly sources for this passage
+                </div>
+              </>
+            ) : (
+              <>
+                <Loader2 size={24} className="animate-spin mb-2" />
+                <span className="text-[12px]">Searching scholarly providers...</span>
+              </>
+            )}
           </div>
         ) : results.length === 0 && !errorMsg ? (
           <div className="text-center py-8">
@@ -239,7 +288,11 @@ export function ResearchTab({ workId, onSourceSaved, evidenceSelection, onClearE
             const isExpanded = expandedId === trackId;
 
             return (
-              <div key={idx} className="bg-white border border-border-light rounded p-3 shadow-sm text-[13px] flex flex-col gap-2">
+              <div 
+                key={idx} 
+                className="bg-white border border-border-light rounded p-3 shadow-sm text-[13px] flex flex-col gap-2 animate-in fade-in slide-in-from-bottom-2 duration-300"
+                style={{ animationFillMode: 'both', animationDelay: `${idx * 40}ms` }}
+              >
                 
                 {/* Warnings */}
                 {r.integrity.retraction === 'retracted' && (
