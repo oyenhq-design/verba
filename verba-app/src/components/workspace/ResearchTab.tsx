@@ -261,7 +261,7 @@ export function ResearchTab({ workId, onSourceSaved, evidenceSelection, onClearE
         )}
         
         {evidenceSelection && (
-          <div className="mt-3 p-3 bg-accent/5 border border-accent/20 rounded relative text-[12px]">
+          <div className="mt-3 p-3 bg-accent/5 border border-accent/20 rounded relative text-[12px] max-h-[50vh] overflow-y-auto">
             <button 
               onClick={onClearEvidenceSelection}
               className="absolute top-2 right-2 text-foreground-muted hover:text-foreground-secondary z-10 transition-colors"
